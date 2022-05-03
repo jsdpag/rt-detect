@@ -7,47 +7,17 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-
-
-%%% CONSTANTS %%%
-dbstop in rt_det_train.m at 15
-% Sample wait duration
-WDUR = min( exprnd( 1500 ) , expinv( 0.95 , 1500 ) ) ;
-
-% Table of states. Each row defines a state. Column order is: state name,
-% timeout duration, next state after timeout or max repetitions, wait event
-% list, next state(s) after wait event(s); latter two are string or cell of
-% strings.
-STATE_TABLE = ...
-{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' ;
-          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'LostFix' ;
-             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } ;
-         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } ;
-   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } ;
-          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' ;
- 'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' ;
-         'Evaluate' ,    0 , 'EyeTrackError'  ,  'TargetIn' , 'TargetSelected' ;
-   'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' ;
-'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} ;
-          'Ignored' ,    0 , 'cleanUp'        , {} , {} ;
-          'LostFix' , 1000 , 'cleanUp'        , 'FixIn' , 'HoldFix' ;
-        'BrokenFix' ,    0 , 'cleanUp'        , {} , {} ;
-    'BrokenSaccade' ,    0 , 'cleanUp'        , {} , {} ;
-    'EyeTrackError' ,    0 , 'cleanUp'        , {} , {} ; 
-       'FalseAlarm' ,    0 , 'cleanUp'        , {} , {} ;
-           'Missed' ,    0 , 'cleanUp'        , {} , {} ;
-           'Failed' ,    0 , 'cleanUp'        , {} , {} ;
-          'Correct' ,    0 , 'cleanUp'        , {} , {} ;
-          'cleanUp' ,    0 , 'final'          , {} , {} ;
-} ;
-
-% Different max rep needed by these states
-MAXREP.LostFix = 100 ;
-
+dbstop in rt_det_train.m at 14
 
 %%% FIRST TRIAL INITIALISATION -- PERSISTENT DATA %%%
 
 if  TrialData.currentTrial == 1
+  
+  % Event marker codes for each state
+  P.evm = rt_det_train_event_marker( STATE_TABLE( : , 1 ) ) ;
+  
+  % Make copy of trial error name to value mapping
+  P.err = gettrialerrors( true ) ;
   
   % Open Win32 inter-process communication events
   for  E = { 'StartSacc' , 'EndSacc' , 'StartFix' , 'FalseAlarmFlag' }
@@ -86,6 +56,46 @@ else
 end % first trial init
 
 
+%%% DEFINE TASK STATES %%%
+
+% Sample wait duration
+WDUR = min( exprnd( 1500 ) , expinv( 0.95 , 1500 ) ) ;
+
+% Table of states. Each row defines a state. Column order is: state name;
+% timeout duration; next state after timeout or max repetitions; wait event
+% list; next state(s) after wait event(s), latter two are string or cell of
+% strings; cell array of additional Name/Value input args for onEntry
+% actions. For onEntry args, the State, State event marker, and trial error
+% are automatically generated; only include additional args.
+STATE_TABLE = ...
+{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , {} ;
+          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , {} ;
+             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , {} ;
+         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , {} ;
+   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , {} ;
+          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , {} ;
+ 'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
+         'Evaluate' ,    0 , 'EyeTrackError'  ,  'TargetIn' , 'TargetSelected' , {} ;
+   'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
+           'GetFix' , 1000 , 'LostFix'        , 'FixIn' , 'HoldFix' , {} ;
+'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , {} ;
+          'Ignored' ,    0 , 'cleanUp'        , {} , {} , {} ;
+          'LostFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
+        'BrokenFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
+    'BrokenSaccade' ,    0 , 'cleanUp'        , {} , {} , {} ;
+    'EyeTrackError' ,    0 , 'cleanUp'        , {} , {} , {} ; 
+       'FalseAlarm' ,    0 , 'cleanUp'        , {} , {} , {} ;
+           'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
+           'Failed' ,    0 , 'cleanUp'        , {} , {} , {} ;
+          'Correct' ,    0 , 'cleanUp'        , {} , {} , {} ;
+          'cleanUp' ,    0 , 'final'          , {} , {} , {} ;
+} ;
+
+% Special constants for value of max reps
+MAXREP_DEFAULT = 2 ;
+MAXREP_GETFIX  = 100 ;
+
+
 %%% MAKE ARCADE STATES %%%
 
 % State table rows
@@ -100,12 +110,12 @@ for  row = 1 : size( STATE_TABLE , 1 )
   % Set timeout duration, max number executions, and next state after
   % timeout or max reps. Max reps = 2 so that no inf loops, and don't trig
   % wrong state.
-  states.( name ).duration                     =   timeout ;
-  states.( name ).maxRepetitions               =         2 ;
-  states.( name ).nextStateAfterTimeout        = tout_next ;
-  states.( name ).nextStateAfterMaxRepetitions = tout_next ;
-  states.( name ).waitEvents                   =    waitev ;
-  states.( name ).nextStateAfterEvent          = wait_next ;
+  states.( name ).duration                     =        timeout ;
+  states.( name ).maxRepetitions               = MAXREP_DEFAULT ;
+  states.( name ).nextStateAfterTimeout        =      tout_next ;
+  states.( name ).nextStateAfterMaxRepetitions =      tout_next ;
+  states.( name ).waitEvents                   =         waitev ;
+  states.( name ).nextStateAfterEvent          =      wait_next ;
   
   % Want different number of maximum executions for state
   if  isfield( MAXREP , name )
@@ -114,14 +124,17 @@ for  row = 1 : size( STATE_TABLE , 1 )
   
 end % rows
 
+% Special action, only GetFix has different Max repetitions
+states.GetFix.maxRepetitions = MAXREP_GETFIX ;
+
 
 %%% DEFINE STATE ACTIONS %%%
 
 % HoldFix turns Fix point on
-states.HoldFix.onEntry = { @() set( P.Fix.visible , 1 ) } ;
+states.HoldFix.onEntry = { @() set( P.Fix , 'visible' , 1 ) } ;
 
-% LostFix turns Fix point off
-states.HoldFix.onEntry = { @() set( P.Fix.visible , 0 ) } ;
+% GetFix turns Fix point off
+states.GetFix.onEntry = { @() set( P.Fix , 'visible' , 0 ) } ;
 
 % Wait resets saccade and FA events
 E = { P.StartSacc , P.EndSacc , P.FalseAlarmFlag } ;
@@ -159,4 +172,90 @@ function  pout = persist( pin )
   if  nargout , pout = p ; end
   
 end % persist
+
+% Build input argument struct for state action function. Provide name,
+% value pairs. Names are also the fields of an arg struct. Valid names are:
+% 'State' - Handle to calling state. 'Marker' - vector of integer event
+% marker values sent out of DAQ digital ports when state's onEntry
+% executes, in the order they are given. 'Stim' - ARCADE stimulus handle,
+% visibility is simply flipped to opposite state. 'Event' - Array of
+% IPCEvent handles, all connected Win32 events are reset. 'TrialError' -
+% scalar numeric trial error code. 'Photodiode' - char vector i.e. string
+% of valid input for photodiode helper function. 'RunTimeVar' - Handle to
+% StateRuntimeVariable. 'RunTimeVal' - Names the value to store in
+% StateRuntimeVariable given in 'RunTimeVar', this must name a parameter or
+% function of the given 'State', such as 'startTic' or 'elapsedTime'.
+function  ain = argstruct( varargin )
+  
+  % Default ain field name set
+  ain = { 'State' , 'Marker' , 'Stim' , 'Event' , 'TrialError' , ...
+    'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+  
+  % Append second row of empty double arrays
+  ain = [ ain ; cell( size( ain ) ) ] ;
+  
+  % Make a copy for logical flags
+  flg = ain ;
+  
+    % Replace empty arrays with scalar logical false
+    flg( 2 , : ) = { false } ;
+  
+  % Create struct of valid input names, for mapping to input values
+  ain = struct( ain{ : } ) ;
+  flg = struct( flg{ : } ) ;
+  
+  % Scan input Name/Value pairs
+  for  i = 1 : 2 : nargin , nam = varargin{ i } ; val = varargin{ i + 1 } ;
+    
+    % Store value
+    ain.( nam ) = val ;
+    
+    % Raise flag
+    flg.( nam ) = true ;
+    
+  end % name/val
+  
+  % Create an additional flag. Raise this if it is necessary to group
+  % stimuli before drawing the next frame. This is the case when there are
+  % more than one stimulus and/or at least one stimulus with a photodiode
+  % change.
+  flg.grpstim = numel( ain.Stim ) > 1  ||  ( flg.Stim && flg.Photodiode ) ;
+  
+  % Store flags in return struct
+  ain.flg = flg ;
+  
+end % argstruct
+
+
+% Generic onEntry function. a is a struct created by argstruct.
+function  onEntry( a )
+  
+  % Point to logical flags
+  flg = a.flg ;
+
+  % Begin stimulus grouping
+  if  flg.grpstim , groupStimuli( 'start' ) , end
+  
+    % Flip stimulus visibility
+    for  S = a.Stim , s = S{ 1 } ; s.visible = ~ s.visible ; end
+
+    % Change state of photodiode
+    if  flg.Photodiode , photodiode( a.Photodiode ) , end
+  
+  % Finished stimulus grouping
+  if  flg.grpstim , groupStimuli( 'end' ) , end
+  
+  % Reset events
+  for  i = 1 : numel( a.Event ) , a.Event( i ).reset , end
+  
+  % Store State value
+  if  flg.RunTimeVal , a.RunTimeVar = a.State.( a.RunTimeVal ) ; end
+  
+  % Generate event markers
+  for  i = 1 : numel( a.Marker ) , eventmarker( a.Marker( i ) ) , end
+  
+  % Register trial error code on current trial
+  if  flg.TrialError , trialerror( a.TrialError ) , end
+  
+end % onEntry
 
