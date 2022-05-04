@@ -41,6 +41,10 @@ if  TrialData.currentTrial == 1
     P.Target.sdy = 80 ;
     P.Target.color( : ) = 255 ;
   
+  % Make reaction time start and end time variables
+  P.RTstart = StateRuntimeVariable ;
+  P.RTend   = StateRuntimeVariable ;
+  
   % Keep persistent store of IPCEvent handles
   persist( P )
   
@@ -56,30 +60,36 @@ else
 end % first trial init
 
 
-%%% DEFINE TASK STATES %%%
+%%% Trial variables %%%
+
+% Session's ARCADE config object
+cfg = retrieveConfig ;
 
 % Sample wait duration
 WDUR = min( exprnd( 1500 ) , expinv( 0.95 , 1500 ) ) ;
+
+
+%%% DEFINE TASK STATES %%%
 
 % Table of states. Each row defines a state. Column order is: state name;
 % timeout duration; next state after timeout or max repetitions; wait event
 % list; next state(s) after wait event(s), latter two are string or cell of
 % strings; cell array of additional Name/Value input args for onEntry
 % actions. For onEntry args, the State, State event marker, trial error
-% code, and Start state handle are automatically generated; only include
-% additional args.
+% code, and time zero state handle are automatically generated; only
+% include additional args.
 STATE_TABLE = ...
-{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Photodiode' , 'off' } ;
+{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , P.Fix , 'Photodiode' , 'off' } ;
           'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'Stim' , P.Fix } ;
-             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Event' , 'Photodiode' } ;
-         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
-   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
-          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
- 'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
-         'Evaluate' ,    0 , 'EyeTrackError'  ,  'TargetIn' , 'TargetSelected' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
-   'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
-           'GetFix' , 1000 , 'LostFix'        , 'FixIn' , 'HoldFix' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
-'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Event' , [ P.StartSacc , P.EndSacc , P.FalseAlarmFlag ] , 'Photodiode' , 'on' } ;
+         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , P.Target , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
+   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { } ;
+          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , { 'Event' , P.StartFix , 'RunTimeVal' , P.RTend } ;
+ 'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
+         'Evaluate' ,    0 , 'EyeTrackError'  ,  'TargetIn' , 'TargetSelected' , {} ;
+   'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
+           'GetFix' , 1000 , 'LostFix'        , 'FixIn' , 'HoldFix' , {} ;
+'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Trigger' , P.FalseAlarmFlag } ;
           'Ignored' ,    0 , 'cleanUp'        , {} , {} , {} ;
           'LostFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
         'BrokenFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
@@ -91,6 +101,12 @@ STATE_TABLE = ...
           'Correct' ,    0 , 'cleanUp'        , {} , {} , {} ;
           'cleanUp' ,    0 , 'final'          , {} , {} , {} ;
 } ;
+
+% Special actions that are not executed by generic onEntry
+AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend - p.RTstart ),...
+                   @( ) reward( 100 ) } ;
+AUXACT.cleanUp = { @( ) set( P.Fix    , 'visible' , false ) , ...
+                   @( ) set( P.Target , 'visible' , false ) } ;
 
 % Special constants for value of max reps
 MAXREP_DEFAULT = 2 ;
@@ -119,42 +135,28 @@ for  row = 1 : size( STATE_TABLE , 1 )
   states.( name ).waitEvents                   =         waitev ;
   states.( name ).nextStateAfterEvent          =      wait_next ;
   
-  % Want different number of maximum executions for state
-  if  isfield( MAXREP , name )
-    states.( name ).maxRepetitions = MAXREP.( name ) ;
+  % Issue a trial error code if this is an end state i.e. it transitions to
+  % cleanUp. Default empty.
+  TrialError = { } ;
+  if  strcmp( tout_next , 'cleanUp' )
+    TrialError = { 'TrialError' , P.err.( name ) } ;
   end
+  
+  % Default Name/Value pairs for onEntry input argument constructor. Append
+  % additional pairs for this state.
+  entarg = [ entarg , TrialError , { 'State' , states.( name ) , ...
+    'Marker' , P.evm.( name ) , 'TimeZero' , states.Start } ] ;
+  
+  % onEntry input arg struct
+  a = onEntry_args( entarg{ : } ) ;
+  
+  % Define state's onEntry actions
+  states.( name ).onEntry = { @( ) onEntry( a ) } ;
   
 end % rows
 
 % Special action, only GetFix has different Max repetitions
 states.GetFix.maxRepetitions = MAXREP_GETFIX ;
-
-
-%%% DEFINE STATE ACTIONS %%%
-
-% HoldFix turns Fix point on
-states.HoldFix.onEntry = { @() set( P.Fix , 'visible' , 1 ) } ;
-
-% GetFix turns Fix point off
-states.GetFix.onEntry = { @() set( P.Fix , 'visible' , 0 ) } ;
-
-% Wait resets saccade and FA events
-E = { P.StartSacc , P.EndSacc , P.FalseAlarmFlag } ;
-states.Wait.onEntry = { @() cellfun( @( e ) e.reset , E ) } ;
-
-% TargetOn makes target visible
-states.TargetOn.onEntry = { @() set( P.Target , 'visible' , 1 ) } ;
-
-% FalseAlarmSaccade raises FalseAlarmFlag event
-states.FalseAlarmSaccade.onEntry = { @() P.FalseAlarmFlag.trigger } ;
-
-% Saccade resets StartFix event
-states.Saccade.onEntry = { @() P.StartFix.reset } ;
-
-% cleanUp makes all visual stimuli disappear
-E = { P.Fix , P.Target } ;
-states.cleanUp.onEntry = ...
-  { @() cellfun( @( s ) set( s , 'visible' , 0 ) , E ) } ;
 
 
 %%% CREATE TRIAL %%%
@@ -175,23 +177,24 @@ function  pout = persist( pin )
   
 end % persist
 
-% Build input argument struct for state action function. Provide name,
-% value pairs. Names are also the fields of an arg struct. Valid names are:
-% 'State' - Handle to calling state. 'Marker' - integer event
-% marker value sent out of DAQ digital ports when state's onEntry
-% executes. 'Stim' - ARCADE stimulus handle,
-% visibility is simply flipped to opposite state. 'Event' - Array of
-% IPCEvent handles, all connected Win32 events are reset. 'TrialError' -
-% scalar numeric trial error code. 'Photodiode' - char vector i.e. string
-% of valid input for photodiode helper function. 'TimeZero' - Handle to
-% State object, its startTic value is used as time zero, against which time
-% is measured. 'RunTimeVal' - Handle to StateRuntimeVariable in which
-% elapsed seconds since time zero is stored.
-function  ain = argstruct( varargin )
+% Build input argument struct for state action function. Provide Name/Value
+% pairs. Names are also the fields of an arg struct. Valid names are:
+% 'State' - Handle to calling state. 'Marker' - integer event marker value
+% sent out of DAQ digital ports when state's onEntry executes. 'Stim' -
+% ARCADE stimulus handle, visibility is simply flipped to opposite state.
+% 'Event' - Array of IPCEvent handles, all connected Win32 events are
+% reset. 'Trigger' - Same as 'Event', but Win32 events are triggered rather
+% than re-set. 'TrialError' - scalar numeric trial error code. 'Photodiode'
+% - char vector i.e. string of valid input for photodiode helper function.
+% 'TimeZero' - Handle to State object, its startTic value is used as time
+% zero, against which time is measured. 'RunTimeVal' - Handle to
+% StateRuntimeVariable in which elapsed seconds since time zero is stored.
+% 'Reward' - Scalar integer, reward size in milliseconds.
+function  ain = onEntry_args( varargin )
   
   % Default ain field name set
-  ain = { 'State' , 'Marker' , 'Stim' , 'Event' , 'TrialError' , ...
-    'Photodiode' , 'TimeZero' , 'RunTimeVal' } ;
+  ain = { 'State', 'Marker', 'Stim', 'Event', 'Trigger', 'TrialError', ...
+    'Photodiode', 'TimeZero', 'RunTimeVal' , 'Reward' } ;
   
   % Append second row of empty double arrays
   ain = [ ain ; cell( size( ain ) ) ] ;
@@ -249,6 +252,9 @@ function  onEntry( a )
   
   % Reset events
   for  i = 1 : numel( a.Event ) , a.Event( i ).reset , end
+  
+  % Trigger events
+  for  i = 1 : numel( a.Trigger ) , a.Event( i ).trigger , end
   
   % Generate event marker
   if  flg.Marker , eventmarker( a.Marker ) , end
