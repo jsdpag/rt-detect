@@ -65,20 +65,21 @@ WDUR = min( exprnd( 1500 ) , expinv( 0.95 , 1500 ) ) ;
 % timeout duration; next state after timeout or max repetitions; wait event
 % list; next state(s) after wait event(s), latter two are string or cell of
 % strings; cell array of additional Name/Value input args for onEntry
-% actions. For onEntry args, the State, State event marker, and trial error
-% are automatically generated; only include additional args.
+% actions. For onEntry args, the State, State event marker, trial error
+% code, and Start state handle are automatically generated; only include
+% additional args.
 STATE_TABLE = ...
-{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , {} ;
-          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , {} ;
-             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , {} ;
-         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , {} ;
-   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , {} ;
-          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , {} ;
- 'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
-         'Evaluate' ,    0 , 'EyeTrackError'  ,  'TargetIn' , 'TargetSelected' , {} ;
-   'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
-           'GetFix' , 1000 , 'LostFix'        , 'FixIn' , 'HoldFix' , {} ;
-'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , {} ;
+{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Photodiode' , 'off' } ;
+          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'Stim' , P.Fix } ;
+             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Event' , 'Photodiode' } ;
+         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+ 'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+         'Evaluate' ,    0 , 'EyeTrackError'  ,  'TargetIn' , 'TargetSelected' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+   'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+           'GetFix' , 1000 , 'LostFix'        , 'FixIn' , 'HoldFix' , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Stim' , 'Event' , 'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
           'Ignored' ,    0 , 'cleanUp'        , {} , {} , {} ;
           'LostFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
         'BrokenFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
@@ -102,7 +103,8 @@ MAXREP_GETFIX  = 100 ;
 for  row = 1 : size( STATE_TABLE , 1 )
   
   % Map table entry to meaningful names
-  [ name, timeout, tout_next, waitev, wait_next ] = STATE_TABLE{ row , : };
+  [ name , timeout , tout_next , waitev , wait_next , entarg ] = ...
+    STATE_TABLE{ row , : } ;
   
   % Create new state
   states.( name ) = State( name ) ;
@@ -175,21 +177,21 @@ end % persist
 
 % Build input argument struct for state action function. Provide name,
 % value pairs. Names are also the fields of an arg struct. Valid names are:
-% 'State' - Handle to calling state. 'Marker' - vector of integer event
-% marker values sent out of DAQ digital ports when state's onEntry
-% executes, in the order they are given. 'Stim' - ARCADE stimulus handle,
+% 'State' - Handle to calling state. 'Marker' - integer event
+% marker value sent out of DAQ digital ports when state's onEntry
+% executes. 'Stim' - ARCADE stimulus handle,
 % visibility is simply flipped to opposite state. 'Event' - Array of
 % IPCEvent handles, all connected Win32 events are reset. 'TrialError' -
 % scalar numeric trial error code. 'Photodiode' - char vector i.e. string
-% of valid input for photodiode helper function. 'RunTimeVar' - Handle to
-% StateRuntimeVariable. 'RunTimeVal' - Names the value to store in
-% StateRuntimeVariable given in 'RunTimeVar', this must name a parameter or
-% function of the given 'State', such as 'startTic' or 'elapsedTime'.
+% of valid input for photodiode helper function. 'TimeZero' - Handle to
+% State object, its startTic value is used as time zero, against which time
+% is measured. 'RunTimeVal' - Handle to StateRuntimeVariable in which
+% elapsed seconds since time zero is stored.
 function  ain = argstruct( varargin )
   
   % Default ain field name set
   ain = { 'State' , 'Marker' , 'Stim' , 'Event' , 'TrialError' , ...
-    'Photodiode' , 'RunTimeVar' , 'RunTimeVal' } ;
+    'Photodiode' , 'TimeZero' , 'RunTimeVal' } ;
   
   % Append second row of empty double arrays
   ain = [ ain ; cell( size( ain ) ) ] ;
@@ -248,11 +250,24 @@ function  onEntry( a )
   % Reset events
   for  i = 1 : numel( a.Event ) , a.Event( i ).reset , end
   
-  % Store State value
-  if  flg.RunTimeVal , a.RunTimeVar = a.State.( a.RunTimeVal ) ; end
+  % Generate event marker
+  if  flg.Marker , eventmarker( a.Marker ) , end
   
-  % Generate event markers
-  for  i = 1 : numel( a.Marker ) , eventmarker( a.Marker( i ) ) , end
+  % Time zero is defined
+  if  fig.TimeZero
+    
+    % Measure elapsed time in seconds
+    t = toc( a.TimeZero.startTic ) ;
+    
+    % Time store provided
+    if  flg.RunTimeVal , a.RunTimeVal.value = t ; end
+    
+    % Print state name and time from time zero with ms precision
+    fprintf( '%7.3f %s\n' , a.Start.elapsedTime , a.State.name )
+  
+  % Print State name with low-res, absolute time stamp
+  else , logmessage( a.State.name )
+  end
   
   % Register trial error code on current trial
   if  flg.TrialError , trialerror( a.TrialError ) , end
