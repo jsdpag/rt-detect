@@ -28,13 +28,13 @@ function  onEntry_generic( a )
   for  i = 1 : numel( a.Event ) , a.Event( i ).reset , end
   
   % Trigger events
-  for  i = 1 : numel( a.Trigger ) , a.Event( i ).trigger , end
+  for  i = 1 : numel( a.Trigger ) , a.Trigger( i ).trigger , end
   
   % Generate event marker
   if  flg.Marker , eventmarker( a.Marker ) , end
   
   % Time zero is defined
-  if  fig.TimeZero
+  if  flg.TimeZero
     
     % Measure elapsed time in seconds
     t = toc( a.TimeZero.startTic ) ;
@@ -43,7 +43,7 @@ function  onEntry_generic( a )
     if  flg.RunTimeVal , a.RunTimeVal.value = t ; end
     
     % Print state name and time from time zero with ms precision
-    fprintf( '%7.3f %s\n' , a.Start.elapsedTime , a.State.name )
+    fprintf( '%7.3f %s\n' , t , a.State.name )
   
   % Print State name with low-res, absolute time stamp
   else , logmessage( a.State.name )

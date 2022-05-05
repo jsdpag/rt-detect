@@ -7,14 +7,19 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-dbstop in rt_det_train.m at 14
+% dbstop in rt_det_train.m at 14
 
 %%% FIRST TRIAL INITIALISATION -- PERSISTENT DATA %%%
 
 if  TrialData.currentTrial == 1
   
   % Event marker codes for each state
-  P.evm = rt_det_train_event_marker( STATE_TABLE( : , 1 ) ) ;
+  P.evm = rt_det_train_event_marker( { 'Start' , 'HoldFix' , 'Wait' , ...
+    'TargetOn' , 'ResponseWindow' , 'Saccade' , 'GetSaccadeTarget' , ...
+      'Evaluate' , 'TargetSelected' , 'GetFix' , 'FalseAlarmSaccade' , ...
+        'Ignored' , 'LostFix' , 'BrokenFix' , 'BrokenSaccade' , ...
+          'EyeTrackError' , 'FalseAlarm' , 'Missed' , 'Failed' , ...
+            'Correct' , 'cleanUp' } ) ;
   
   % Make copy of trial error name to value mapping
   P.err = gettrialerrors( true ) ;
@@ -79,14 +84,14 @@ WDUR = min( exprnd( 1500 ) , expinv( 0.95 , 1500 ) ) ;
 % code, and time zero state handle are automatically generated; only
 % include additional args.
 STATE_TABLE = ...
-{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , P.Fix , 'Photodiode' , 'off' } ;
-          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'Stim' , P.Fix } ;
+{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'Photodiode' , 'off' } ;
+          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'Stim' , { P.Fix } } ;
              'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Event' , [ P.StartSacc , P.EndSacc , P.FalseAlarmFlag ] , 'Photodiode' , 'on' } ;
-         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , P.Target , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
+         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { P.Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
    'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { } ;
           'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , { 'Event' , P.StartFix , 'RunTimeVal' , P.RTend } ;
  'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
-         'Evaluate' ,    0 , 'EyeTrackError'  ,  'TargetIn' , 'TargetSelected' , {} ;
+         'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixOut' } , { 'TargetSelected' , 'Missed' } , {} ;
    'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
            'GetFix' , 1000 , 'LostFix'        , 'FixIn' , 'HoldFix' , {} ;
 'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Trigger' , P.FalseAlarmFlag } ;
@@ -103,7 +108,8 @@ STATE_TABLE = ...
 } ;
 
 % Special actions that are not executed by generic onEntry
-AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend - p.RTstart ),...
+AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
+                          P.RTstart.get_value( ) ) , ...
                    @( ) reward( 100 ) } ;
 AUXACT.cleanUp = { @( ) set( P.Fix    , 'visible' , false ) , ...
                    @( ) set( P.Target , 'visible' , false ) } ;
@@ -111,6 +117,15 @@ AUXACT.cleanUp = { @( ) set( P.Fix    , 'visible' , false ) , ...
 % Special constants for value of max reps
 MAXREP_DEFAULT = 2 ;
 MAXREP_GETFIX  = 100 ;
+
+% Error check first trial, make sure that there is an event marker for
+% each state name
+if  TrialData.currentTrial == 1  &&  ...
+    ~ isequal( fieldnames( P.evm ) , STATE_TABLE( : , 1 ) )
+    
+  error( 'Mismatched event and state names' )
+  
+end % state name check
 
 
 %%% MAKE ARCADE STATES %%%
@@ -171,6 +186,10 @@ states.GetFix.maxRepetitions = MAXREP_GETFIX ;
 
 states = struct2cell( states ) ;
 createTrial( 'Start' , states{ : } )
+
+% Output to message log
+fprintf( '\n' )
+logmessage( sprintf( 'Trial %d' , TrialData.currentTrial ) )
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%

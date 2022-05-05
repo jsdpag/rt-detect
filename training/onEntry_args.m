@@ -88,7 +88,9 @@ function  ain = onEntry_args( varargin )
   for  i = 1 : 2 : nargin , nam = varargin{ i } ; val = varargin{ i + 1 } ;
     
     % Error check value
-    if  ~ ech.( nam ) , error( '%s must be %s' , ems.( nam ) ) , end
+    if  ~ ech.( nam )( val )
+      error( '%s must be %s' , nam , ems.( nam ) )
+    end
     
     % Store value
     ain.( nam ) = val ;
