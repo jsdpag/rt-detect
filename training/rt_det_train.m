@@ -151,11 +151,19 @@ for  row = 1 : size( STATE_TABLE , 1 )
   a = onEntry_args( entarg{ : } ) ;
   
   % Define state's onEntry actions
-  states.( name ).onEntry = { @( ) onEntry( a ) } ;
+  states.( name ).onEntry = { @( ) onEntry_generic( a ) } ;
   
 end % rows
 
-% Special action, only GetFix has different Max repetitions
+% States with special actions
+for  F = fieldnames( AUXACT )' , name = F{ 1 } ;
+  
+  % Append additional actions
+  states.( name ).onEntry = [ states.( name ).onEntry , AUXACT.( name ) ] ;
+  
+end % special actions
+
+% Only GetFix has different Max repetitions
 states.GetFix.maxRepetitions = MAXREP_GETFIX ;
 
 
@@ -176,107 +184,4 @@ function  pout = persist( pin )
   if  nargout , pout = p ; end
   
 end % persist
-
-% Build input argument struct for state action function. Provide Name/Value
-% pairs. Names are also the fields of an arg struct. Valid names are:
-% 'State' - Handle to calling state. 'Marker' - integer event marker value
-% sent out of DAQ digital ports when state's onEntry executes. 'Stim' -
-% ARCADE stimulus handle, visibility is simply flipped to opposite state.
-% 'Event' - Array of IPCEvent handles, all connected Win32 events are
-% reset. 'Trigger' - Same as 'Event', but Win32 events are triggered rather
-% than re-set. 'TrialError' - scalar numeric trial error code. 'Photodiode'
-% - char vector i.e. string of valid input for photodiode helper function.
-% 'TimeZero' - Handle to State object, its startTic value is used as time
-% zero, against which time is measured. 'RunTimeVal' - Handle to
-% StateRuntimeVariable in which elapsed seconds since time zero is stored.
-% 'Reward' - Scalar integer, reward size in milliseconds.
-function  ain = onEntry_args( varargin )
-  
-  % Default ain field name set
-  ain = { 'State', 'Marker', 'Stim', 'Event', 'Trigger', 'TrialError', ...
-    'Photodiode', 'TimeZero', 'RunTimeVal' , 'Reward' } ;
-  
-  % Append second row of empty double arrays
-  ain = [ ain ; cell( size( ain ) ) ] ;
-  
-  % Make a copy for logical flags
-  flg = ain ;
-  
-    % Replace empty arrays with scalar logical false
-    flg( 2 , : ) = { false } ;
-  
-  % Create struct of valid input names, for mapping to input values
-  ain = struct( ain{ : } ) ;
-  flg = struct( flg{ : } ) ;
-  
-  % Scan input Name/Value pairs
-  for  i = 1 : 2 : nargin , nam = varargin{ i } ; val = varargin{ i + 1 } ;
-    
-    % Store value
-    ain.( nam ) = val ;
-    
-    % Raise flag
-    flg.( nam ) = true ;
-    
-  end % name/val
-  
-  % Create an additional flag. Raise this if it is necessary to group
-  % stimuli before drawing the next frame. This is the case when there are
-  % more than one stimulus and/or at least one stimulus with a photodiode
-  % change.
-  flg.grpstim = numel( ain.Stim ) > 1  ||  ( flg.Stim && flg.Photodiode ) ;
-  
-  % Store flags in return struct
-  ain.flg = flg ;
-  
-end % argstruct
-
-
-% Generic onEntry function. a is a struct created by argstruct.
-function  onEntry( a )
-  
-  % Point to logical flags
-  flg = a.flg ;
-
-  % Begin stimulus grouping
-  if  flg.grpstim , groupStimuli( 'start' ) , end
-  
-    % Flip stimulus visibility
-    for  S = a.Stim , s = S{ 1 } ; s.visible = ~ s.visible ; end
-
-    % Change state of photodiode
-    if  flg.Photodiode , photodiode( a.Photodiode ) , end
-  
-  % Finished stimulus grouping
-  if  flg.grpstim , groupStimuli( 'end' ) , end
-  
-  % Reset events
-  for  i = 1 : numel( a.Event ) , a.Event( i ).reset , end
-  
-  % Trigger events
-  for  i = 1 : numel( a.Trigger ) , a.Event( i ).trigger , end
-  
-  % Generate event marker
-  if  flg.Marker , eventmarker( a.Marker ) , end
-  
-  % Time zero is defined
-  if  fig.TimeZero
-    
-    % Measure elapsed time in seconds
-    t = toc( a.TimeZero.startTic ) ;
-    
-    % Time store provided
-    if  flg.RunTimeVal , a.RunTimeVal.value = t ; end
-    
-    % Print state name and time from time zero with ms precision
-    fprintf( '%7.3f %s\n' , a.Start.elapsedTime , a.State.name )
-  
-  % Print State name with low-res, absolute time stamp
-  else , logmessage( a.State.name )
-  end
-  
-  % Register trial error code on current trial
-  if  flg.TrialError , trialerror( a.TrialError ) , end
-  
-end % onEntry
 
