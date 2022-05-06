@@ -25,7 +25,7 @@ function  onEntry_generic( a )
   if  flg.grpstim , groupStimuli( 'end' ) , end
   
   % Reset events
-  for  i = 1 : numel( a.Event ) , a.Event( i ).reset , end
+  for  i = 1 : numel( a.Reset ) , a.Reset( i ).reset , end
   
   % Trigger events
   for  i = 1 : numel( a.Trigger ) , a.Trigger( i ).trigger , end

@@ -16,16 +16,17 @@ if  TrialData.currentTrial == 1
   % Event marker codes for each state
   P.evm = rt_det_train_event_marker( { 'Start' , 'HoldFix' , 'Wait' , ...
     'TargetOn' , 'ResponseWindow' , 'Saccade' , 'GetSaccadeTarget' , ...
-      'Evaluate' , 'TargetSelected' , 'GetFix' , 'FalseAlarmSaccade' , ...
-        'Ignored' , 'LostFix' , 'BrokenFix' , 'BrokenSaccade' , ...
-          'EyeTrackError' , 'FalseAlarm' , 'Missed' , 'Failed' , ...
-            'Correct' , 'cleanUp' } ) ;
+      'Evaluate' , 'TargetSelected' , 'NothingSelected' , 'GetFix' , ...
+        'FalseAlarmSaccade' , 'Ignored' , 'LostFix' , 'BrokenFix' , ...
+          'BrokenSaccade' , 'EyeTrackError' , 'FalseAlarm' , 'Missed' , ...
+            'Failed' , 'Correct' , 'cleanUp' } ) ;
   
   % Make copy of trial error name to value mapping
   P.err = gettrialerrors( true ) ;
   
   % Open Win32 inter-process communication events
-  for  E = { 'StartSacc' , 'EndSacc' , 'StartFix' , 'FalseAlarmFlag' }
+  for  E = { 'StartSacc' , 'EndSacc' , 'StartFix' , 'FalseAlarmFlag' , ...
+      'Waiting' }
     name = E{ 1 } ;
     P.( name ) = IPCEvent( name ) ;
   end
@@ -84,16 +85,17 @@ WDUR = min( exprnd( 1500 ) , expinv( 0.95 , 1500 ) ) ;
 % code, and time zero state handle are automatically generated; only
 % include additional args.
 STATE_TABLE = ...
-{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'Photodiode' , 'off' } ;
-          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'Stim' , { P.Fix } } ;
-             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Event' , [ P.StartSacc , P.EndSacc , P.FalseAlarmFlag ] , 'Photodiode' , 'on' } ;
+{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
+          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , {} ;
+             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
          'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { P.Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
-   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { } ;
-          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , { 'Event' , P.StartFix , 'RunTimeVal' , P.RTend } ;
+   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
+          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
  'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
-         'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixOut' } , { 'TargetSelected' , 'Missed' } , {} ;
+         'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixOut' } , { 'TargetSelected' , 'NothingSelected' } , {} ;
    'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
-           'GetFix' , 1000 , 'LostFix'        , 'FixIn' , 'HoldFix' , {} ;
+  'NothingSelected' ,    0 , 'Missed'         ,   'Waiting' , 'BrokenFix' , {} ;
+           'GetFix' , 1000 , 'LostFix'        ,     'FixIn' , 'HoldFix' , {} ;
 'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Trigger' , P.FalseAlarmFlag } ;
           'Ignored' ,    0 , 'cleanUp'        , {} , {} , {} ;
           'LostFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
@@ -108,6 +110,8 @@ STATE_TABLE = ...
 } ;
 
 % Special actions that are not executed by generic onEntry
+AUXACT.HoldFix = { @( ) set( P.Fix , 'faceColor' , [ 255 , 255 , 255 ] ) };
+AUXACT.GetFix  = { @( ) set( P.Fix , 'faceColor' , [ 000 , 000 , 000 ] ) };
 AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
                           P.RTstart.get_value( ) ) , ...
                    @( ) reward( 100 ) } ;
@@ -180,6 +184,12 @@ end % special actions
 
 % Only GetFix has different Max repetitions
 states.GetFix.maxRepetitions = MAXREP_GETFIX ;
+
+
+%%% Reset Stimuli %%%
+
+% Black fixation point
+P.Fix.faceColor( : ) = 0 ;
 
 
 %%% CREATE TRIAL %%%

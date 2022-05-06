@@ -14,9 +14,9 @@ function  ain = onEntry_args( varargin )
 %                between 0 and 2 ^ 16 - 1 i.e. intmax( 'uint16' ).
 %       'Stim' - ARCADE stimulus handle(s), visibility is simply flipped to
 %                opposite state. Give as cell array of handle(s).
-%      'Event' - Array of IPCEvent handles, all connected Win32 events are
+%      'Reset' - Array of IPCEvent handles, all connected Win32 events are
 %                reset.
-%    'Trigger' - Same as 'Event', but Win32 events are triggered rather
+%    'Trigger' - Same as 'Reset', but Win32 events are triggered rather
 %                than re-set.
 % 'TrialError' - Scalar numeric trial error code.
 % 'Photodiode' - Char vector i.e. string of valid input for photodiode
@@ -37,7 +37,7 @@ function  ain = onEntry_args( varargin )
 % 
   
   % Default ain field name set
-  ain = { 'State', 'Marker', 'Stim', 'Event', 'Trigger', 'TrialError', ...
+  ain = { 'State', 'Marker', 'Stim', 'Reset', 'Trigger', 'TrialError', ...
     'Photodiode', 'TimeZero', 'RunTimeVal' , 'Reward' } ;
   
   % Valid input for photodiode( )
@@ -48,8 +48,8 @@ function  ain = onEntry_args( varargin )
   ech.Marker = @( v ) isscalar( v ) && isnatnum( v , 0 , 2 ^ 16 - 1 ) ;
   ech.Stim = @( v ) iscell( v ) && ...
     all( cellfun( @( v ) isa( v , 'Stimulus' ) , v ) ) ;
-  ech.Event = @( v ) isa( v , 'IPCEvent' ) ;
-  ech.Trigger = ech.Event ;
+  ech.Reset = @( v ) isa( v , 'IPCEvent' ) ;
+  ech.Trigger = ech.Reset ;
   ech.TrialError = @( v ) isscalar( v ) && isnatnum( v , 1 , 9 ) ;
   ech.Photodiode = @( v ) isrow( v ) && ischar( v ) && ...
     any( strcmp( v , phostr ) ) ;
@@ -62,8 +62,8 @@ function  ain = onEntry_args( varargin )
   ems.State = 'ARCADE State' ;
   ems.Marker = 'valid event marker' ;
   ems.Stim = 'cell array of ARCADE Stimulus objects' ;
-  ems.Event = 'IPCEvent array' ;
-  ems.Trigger = ems.Event ;
+  ems.Reset = 'IPCEvent array' ;
+  ems.Trigger = ems.Reset ;
   ems.TrialError = 'valid trial error number' ;
   ems.Photodiode = sprintf( 'one of: ''%s''' , ...
     strjoin( phostr , ''' , ''' ) ) ;
