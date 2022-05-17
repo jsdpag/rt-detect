@@ -7,14 +7,14 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-% dbstop in rt_det_template.m at 14
+
 
 %%% FIRST TRIAL INITIALISATION -- PERSISTENT DATA %%%
 
 if  TrialData.currentTrial == 1
   
   % Event marker codes for each state
-  P.evm = rt_det_train_event_marker( { 'Start' , 'HoldFix' , 'Wait' , ...
+  P.evm = rt_det_template_event_marker( { 'Start' , 'HoldFix' , 'Wait' ,...
     'TargetOn' , 'ResponseWindow' , 'Saccade' , 'GetSaccadeTarget' , ...
       'Evaluate' , 'TargetSelected' , 'NothingSelected' , 'GetFix' , ...
         'FalseAlarmSaccade' , 'Ignored' , 'LostFix' , 'BrokenFix' , ...
@@ -55,8 +55,8 @@ if  TrialData.currentTrial == 1
   persist( P )
   
   % Create fixation and target eye windows
-  trackeye( P.Fix.position    ,  50 , 'Fix'    )
-  trackeye( P.Target.position , 200 , 'Target' )
+  trackeye( P.Fix.position    ,  50 , 'Fix'    ) ;
+  trackeye( P.Target.position , 200 , 'Target' ) ;
   
 % Retrieve persistent data
 else
@@ -71,8 +71,26 @@ end % first trial init
 % Session's ARCADE config object
 cfg = retrieveConfig ;
 
+% These will become user variables
+WAITAVG = 1500 ;
+WAITMAX = 0.95 ;
+REWARD_SLOPE =  1.5 ;
+REWARD_MAX   =  150 ;
+REWARD_MIN   =   20 ;
+REWARD_FAIL  = 0.25 ;
+
 % Sample wait duration
-WDUR = min( exprnd( 1500 ) , expinv( 0.95 , 1500 ) ) ;
+WDUR = min( exprnd( WAITAVG ) , expinv( WAITMAX , WAITAVG ) ) ;
+
+% Compute reward size for correct performance
+rew = rewardsize( P.err.Correct , expcdf( WDUR , WAITAVG ) / WAITMAX , ...
+  REWARD_SLOPE , REWARD_MAX ) ;
+  
+  % And for failed trial [ correct reward , failed reward ]
+  rew = [ rew , REWARD_FAIL * rew ] ;
+  
+  % Round up to next millisecond and guarantee minimum reward size
+  rew = max( REWARD_MIN , ceil( rew ) ) ;
 
 
 %%% DEFINE TASK STATES %%%
@@ -114,9 +132,16 @@ AUXACT.HoldFix = { @( ) set( P.Fix , 'faceColor' , [ 255 , 255 , 255 ] ) };
 AUXACT.GetFix  = { @( ) set( P.Fix , 'faceColor' , [ 000 , 000 , 000 ] ) };
 AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
                           P.RTstart.get_value( ) ) , ...
-                   @( ) reward( 100 ) } ;
+                   @( ) reward( rew( 1 ) ) , ...
+                   @( ) fprintf( '%8sReward %dms\n' , '' , rew( 1 ) ) } ;
+AUXACT.Failed  = { @( ) reward( rew( 2 ) ) , ...
+                   @( ) fprintf( '%8sReward %dms\n' , '' , rew( 2 ) ) } ;
 AUXACT.cleanUp = { @( ) set( P.Fix    , 'visible' , false ) , ...
                    @( ) set( P.Target , 'visible' , false ) } ;
+
+% Special actions executed when state is finished executing
+ENDACT.cleanUp = { @( ) logmessage( sprintf( 'End trial %d' , ...
+  TrialData.currentTrial ) ) } ;
 
 % Special constants for value of max reps
 MAXREP_DEFAULT = 2 ;
@@ -174,13 +199,21 @@ for  row = 1 : size( STATE_TABLE , 1 )
   
 end % rows
 
-% States with special actions
+% States with special actions at beginning of state
 for  F = fieldnames( AUXACT )' , name = F{ 1 } ;
   
   % Append additional actions
   states.( name ).onEntry = [ states.( name ).onEntry , AUXACT.( name ) ] ;
   
-end % special actions
+end % special onEntry actions
+
+% States with special action after having executed
+for  F = fieldnames( ENDACT )' , name = F{ 1 } ;
+  
+  % Append additional actions
+  states.( name ).onExit = [ states.( name ).onExit , ENDACT.( name ) ] ;
+  
+end % special onExit actions
 
 % Only GetFix has different Max repetitions
 states.GetFix.maxRepetitions = MAXREP_GETFIX ;
@@ -199,7 +232,8 @@ createTrial( 'Start' , states{ : } )
 
 % Output to message log
 fprintf( '\n' )
-logmessage( sprintf( 'Trial %d' , TrialData.currentTrial ) )
+logmessage( sprintf( 'Start trial %d' , TrialData.currentTrial ) )
+fprintf( '%9sWait %dms\n' , '' , ceil( WDUR ) )
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%
