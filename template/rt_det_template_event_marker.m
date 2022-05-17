@@ -1,7 +1,7 @@
 
-function  e = rt_det_train_event_marker( states )
+function  e = rt_det_template_event_marker( states )
 % 
-% e = rt_det_train_event_marker( states )
+% e = rt_det_template_event_marker( states )
 % 
 % Creates unsigned 16-bit integer codes for each state named in states, a
 % cell array of strings. Discards special values 1, used by ARCADE for init

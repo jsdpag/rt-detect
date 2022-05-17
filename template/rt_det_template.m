@@ -1,13 +1,13 @@
 
 % 
-% rt_det_train.m
+% rt_det_template.m
 % 
 % Use Win32 Start/EndFix, Start/EndSacc events from EyeLinkServer to
 % control the timing on states in this training version of the reaction
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-% dbstop in rt_det_train.m at 14
+% dbstop in rt_det_template.m at 14
 
 %%% FIRST TRIAL INITIALISATION -- PERSISTENT DATA %%%
 
