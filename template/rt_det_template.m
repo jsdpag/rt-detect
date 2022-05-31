@@ -8,6 +8,11 @@
 % lab of Pascal Fries.
 % 
 
+%%% GLOBAL INITIALISATION %%%
+
+% Session's ARCADE config object
+cfg = retrieveConfig ;
+
 
 %%% FIRST TRIAL INITIALISATION -- PERSISTENT DATA %%%
 
@@ -30,6 +35,12 @@ if  TrialData.currentTrial == 1
     name = E{ 1 } ;
     P.( name ) = IPCEvent( name ) ;
   end
+  
+  % Calculate pixels per degree of visual field. cm/deg * pix/cm = pix/deg.
+  P.pixperdeg = ( cfg.DistanceToScreen * tand( 1 ) )  *  ...
+    ( sqrt( str2double( cfg.MonitorResolution.width  ) ^ 2  +  ...
+            str2double( cfg.MonitorResolution.height ) ^ 2 ) / ...
+      cfg.MonitorDiagonalSize ) ;
   
   % Create fixation and target stimulus handles
   P.Fix = Rectangle ;
@@ -67,9 +78,6 @@ end % first trial init
 
 
 %%% Trial variables %%%
-
-% Session's ARCADE config object
-cfg = retrieveConfig ;
 
 % These will become user variables
 WAITAVG = 1500 ;
