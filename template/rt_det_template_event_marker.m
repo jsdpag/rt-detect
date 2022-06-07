@@ -20,7 +20,7 @@ function  e = rt_det_template_event_marker( states )
 %     onEntry function executes. This should be considered optional. Use it
 %     only if there is any onEntry activity that consumes time.
 %   
-%   <state>_timing - Timer starts and counts down the state's duration.
+%   <state>_start - Timer starts and counts down the state's duration.
 %     This should be considered mandatory and must always be the last to
 %     execute in the onEntry functions.
 %
@@ -72,7 +72,7 @@ function  e = rt_det_template_event_marker( states )
   NSTATE = 4 ;
   
   % Suffixes for each state-specific event name
-  SUFFIX = { 'entry' , 'timing' , 'end' , 'exit' } ;
+  SUFFIX = { 'entry' , 'start' , 'end' , 'exit' } ;
   
   % Constant, reserved ARCADE init/shutdown code
   ARCADE_INIT_SHUTDOWN = 1 ;
