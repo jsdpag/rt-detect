@@ -11,6 +11,9 @@ function  onEntry_generic( a )
   
   % Point to logical flags
   flg = a.flg ;
+  
+  % *_entry event marker
+  if  flg.Marker_entry , eventmarker( a.Marker_entry ) ; end
 
   % Begin stimulus grouping
   if  flg.grpstim , groupStimuli( 'start' ) , end
@@ -30,9 +33,6 @@ function  onEntry_generic( a )
   % Trigger events
   for  i = 1 : numel( a.Trigger ) , a.Trigger( i ).trigger , end
   
-  % Generate event marker
-  if  flg.Marker , eventmarker( a.Marker ) , end
-  
   % Time zero is defined
   if  flg.TimeZero
     
@@ -42,15 +42,21 @@ function  onEntry_generic( a )
     % Time store provided
     if  flg.RunTimeVal , a.RunTimeVal.value = t ; end
     
-    % Print state name and time from time zero with ms precision
-    fprintf( '%7.3f %s\n' , t , a.State.name )
+    % Format time string.
+    ts = sprintf( '%7.3f' , t ) ;
   
-  % Print State name with low-res, absolute time stamp
-  else , logmessage( a.State.name )
+  % Low-res, absolute time stamp
+  else , ts = datestr( now , 'HH:MM:SS' ) ;
   end
+  
+  % Print state name with time stamp
+  EchoServer.Write( '%s %s\n' , ts , a.State.name ) ;
   
   % Register trial error code on current trial
   if  flg.TrialError , trialerror( a.TrialError ) , end
+  
+  % *_start event marker
+  if  flg.Marker_start , eventmarker( a.Marker_start ) ; end
   
 end % onEntry_generic
 

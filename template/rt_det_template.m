@@ -141,9 +141,9 @@ AUXACT.GetFix  = { @( ) set( P.Fix , 'faceColor' , [ 000 , 000 , 000 ] ) };
 AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
                           P.RTstart.get_value( ) ) , ...
                    @( ) reward( rew( 1 ) ) , ...
-                   @( ) fprintf( '%8sReward %dms\n' , '' , rew( 1 ) ) } ;
+                   @( ) EchoServer.Write( '%8sReward %dms\n' , '' , rew( 1 ) ) } ;
 AUXACT.Failed  = { @( ) reward( rew( 2 ) ) , ...
-                   @( ) fprintf( '%8sReward %dms\n' , '' , rew( 2 ) ) } ;
+                   @( ) EchoServer.Write( '%8sReward %dms\n' , '' , rew( 2 ) ) } ;
 AUXACT.cleanUp = { @( ) set( P.Fix    , 'visible' , false ) , ...
                    @( ) set( P.Target , 'visible' , false ) } ;
 
@@ -197,13 +197,21 @@ for  row = 1 : size( STATE_TABLE , 1 )
   % Default Name/Value pairs for onEntry input argument constructor. Append
   % additional pairs for this state.
   entarg = [ entarg , TrialError , { 'State' , states.( name ) , ...
-    'Marker' , P.evm.( name ) , 'TimeZero' , states.Start } ] ;
+    'Marker_entry' , P.evm.( [ name , '_entry' ] ) , ...
+      'Marker_start' , P.evm.( [ name , '_start' ] ) , ...
+        'TimeZero' , states.Start } ] ;
   
   % onEntry input arg struct
   a = onEntry_args( entarg{ : } ) ;
   
   % Define state's onEntry actions
   states.( name ).onEntry = { @( ) onEntry_generic( a ) } ;
+  
+  % onExit marker values
+  exmval = [ P.evm.( [ name , '_end'  ] ) ;
+             P.evm.( [ name , '_exit' ] ) ] ;
+  states.( name ).onExit = { @( ) eventmarker( exmval( 1 ) ) ;
+                             @( ) eventmarker( exmval( 2 ) ) } ;
   
 end % rows
 
@@ -218,8 +226,10 @@ end % special onEntry actions
 % States with special action after having executed
 for  F = fieldnames( ENDACT )' , name = F{ 1 } ;
   
-  % Append additional actions
-  states.( name ).onExit = [ states.( name ).onExit , ENDACT.( name ) ] ;
+  % Insert additional actions between event marker triggers
+  states.( name ).onExit = [ states.( name ).onExit( 1 ) ;
+                                         ENDACT.( name ) ;
+                             states.( name ).onExit( 2 ) ] ;
   
 end % special onExit actions
 
@@ -239,9 +249,8 @@ states = struct2cell( states ) ;
 createTrial( 'Start' , states{ : } )
 
 % Output to message log
-fprintf( '\n' )
-logmessage( sprintf( 'Start trial %d' , TrialData.currentTrial ) )
-fprintf( '%9sWait %dms\n' , '' , ceil( WDUR ) )
+EchoServer.Write( sprintf( '\nStart trial %d\n%9sWait %dms\n' , ...
+  TrialData.currentTrial , '' , ceil( WDUR ) ) )
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%

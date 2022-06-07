@@ -9,9 +9,11 @@ function  ain = onEntry_args( varargin )
 % Valid names are:
 % 
 %      'State' - Handle to calling state.
-%     'Marker' - Integer event marker value sent out of DAQ digital ports
-%                when state's onEntry executes. Must be natural number
-%                between 0 and 2 ^ 16 - 1 i.e. intmax( 'uint16' ).
+%'Marker_entry'- Integer event marker value sent out of DAQ digital ports
+%                before other onEntry functions execute. Must be natural
+%                number between 0 and 2 ^ 16 - 1 i.e. intmax( 'uint16' ).
+%'Marker_start'- Same as Marker_entry, but this event marker is issued
+%                after all other onEntry functions.
 %       'Stim' - ARCADE stimulus handle(s), visibility is simply flipped to
 %                opposite state. Give as cell array of handle(s).
 %      'Reset' - Array of IPCEvent handles, all connected Win32 events are
@@ -45,7 +47,8 @@ function  ain = onEntry_args( varargin )
   
   % Error checking values, returns logical true if input IS valid
   ech.State = @( v ) isscalar( v ) && isa( v , 'State' ) ;
-  ech.Marker = @( v ) isscalar( v ) && isnatnum( v , 0 , 2 ^ 16 - 1 ) ;
+  ech.Marker_entry = @( v ) isscalar( v ) && isnatnum( v, 0, 2 ^ 16 - 1 ) ;
+  ech.Marker_start = ech.Marker_entry ;
   ech.Stim = @( v ) iscell( v ) && ...
     all( cellfun( @( v ) isa( v , 'Stimulus' ) , v ) ) ;
   ech.Reset = @( v ) isa( v , 'IPCEvent' ) ;
@@ -60,7 +63,8 @@ function  ain = onEntry_args( varargin )
   
   % Error messages
   ems.State = 'ARCADE State' ;
-  ems.Marker = 'valid event marker' ;
+  ems.Marker_entry = 'valid event marker' ;
+  ems.Marker_start = ems.Marker_entry ;
   ems.Stim = 'cell array of ARCADE Stimulus objects' ;
   ems.Reset = 'IPCEvent array' ;
   ems.Trigger = ems.Reset ;
