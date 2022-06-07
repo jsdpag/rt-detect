@@ -28,6 +28,8 @@ function  ain = onEntry_args( varargin )
 % 'RunTimeVal' - Handle to StateRuntimeVariable in which elapsed seconds
 %                since time zero is stored.
 %     'Reward' - Scalar integer, reward size in milliseconds.
+%  'Auxiliary' - Cell array of function handles containing additional
+%                actions for special cases.
 % 
 % Additional field ain.flg is a struct with fields listed above, but each
 % contains a scalar logical indicating whether or not the Name/Value pair
@@ -39,8 +41,9 @@ function  ain = onEntry_args( varargin )
 % 
   
   % Default ain field name set
-  ain = { 'State', 'Marker', 'Stim', 'Reset', 'Trigger', 'TrialError', ...
-    'Photodiode', 'TimeZero', 'RunTimeVal' , 'Reward' } ;
+  ain = { 'State', 'Marker_entry', 'Marker_start', 'Stim', 'Reset', ...
+    'Trigger', 'TrialError', 'Photodiode', 'TimeZero', 'RunTimeVal', ...
+      'Reward' , 'Auxiliary' } ;
   
   % Valid input for photodiode( )
   phostr = { 'on' , 'off' , 'toggle' , 'flicker' } ;
@@ -60,6 +63,8 @@ function  ain = onEntry_args( varargin )
   ech.RunTimeVal = @( v ) isscalar( v ) && ...
     isa( v , 'StateRuntimeVariable' ) ;
   ech.Reward = @( v ) isscalar( v ) && isnatnum( v ) ;
+  ech.Auxiliary = @( v ) iscell( v ) && ...
+    all( cellfun( @( v ) isa( v , 'function_handle' ) , v ) ) ;
   
   % Error messages
   ems.State = 'ARCADE State' ;
@@ -74,6 +79,7 @@ function  ain = onEntry_args( varargin )
   ems.TimeZero = ems.State ;
   ems.RunTimeVal = 'StateRuntimeVariable' ;
   ems.Reward = 'natural number' ;
+  ems.Auxiliary = 'cell array of function handles' ;
   
   % Append second row of empty double arrays
   ain = [ ain ; cell( size( ain ) ) ] ;
@@ -112,6 +118,11 @@ function  ain = onEntry_args( varargin )
   
   % Store flags in return struct
   ain.flg = flg ;
+  
+  % Guarantee that auxiliary actions are stored in a row cell array
+  if  flg.Auxiliary  &&  ~ isrow( ain.Auxiliary )
+    ain.Auxiliary = ain.Auxiliary( : )' ;
+  end
   
 end % argstruct
 

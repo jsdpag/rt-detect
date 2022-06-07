@@ -14,6 +14,9 @@ function  onEntry_generic( a )
   
   % *_entry event marker
   if  flg.Marker_entry , eventmarker( a.Marker_entry ) ; end
+  
+  % Execute any auxiliary actions, now
+  if  flg.Auxiliary , for  fh = a.Auxiliary , fh( ) ; end , end
 
   % Begin stimulus grouping
   if  flg.grpstim , groupStimuli( 'start' ) , end
@@ -49,8 +52,21 @@ function  onEntry_generic( a )
   else , ts = datestr( now , 'HH:MM:SS' ) ;
   end
   
+  % Reward subject
+  if  flg.Reward
+    
+    % Issue reward
+    reward( a.Reward ) ;
+    
+    % Build reward string
+    rs = sprintf( '%8sReward %dms\n' , '' , a.Reward ) ;
+    
+  % No reward, reward string is empty
+  else , rs = '' ;
+  end
+  
   % Print state name with time stamp
-  EchoServer.Write( '%s %s\n' , ts , a.State.name ) ;
+  EchoServer.Write( '%s %s\n%s' , ts , a.State.name , rs ) ;
   
   % Register trial error code on current trial
   if  flg.TrialError , trialerror( a.TrialError ) , end

@@ -7,7 +7,7 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-
+dbstop in rt_det_template.m at 14
 %%% GLOBAL INITIALISATION %%%
 
 % Session's ARCADE config object
@@ -18,13 +18,16 @@ cfg = retrieveConfig ;
 
 if  TrialData.currentTrial == 1
   
-  % Event marker codes for each state
-  P.evm = rt_det_template_event_marker( { 'Start' , 'HoldFix' , 'Wait' ,...
-    'TargetOn' , 'ResponseWindow' , 'Saccade' , 'GetSaccadeTarget' , ...
-      'Evaluate' , 'TargetSelected' , 'NothingSelected' , 'GetFix' , ...
+  % Define state names, column of cells
+  P.nam = { 'Start' , 'HoldFix' , 'Wait' , 'TargetOn' , ...
+    'ResponseWindow' , 'Saccade' , 'GetSaccadeTarget' , 'Evaluate' , ...
+      'TargetSelected' , 'NothingSelected' , 'GetFix' , ...
         'FalseAlarmSaccade' , 'Ignored' , 'LostFix' , 'BrokenFix' , ...
           'BrokenSaccade' , 'EyeTrackError' , 'FalseAlarm' , 'Missed' , ...
-            'Failed' , 'Correct' , 'cleanUp' } ) ;
+            'Failed' , 'Correct' , 'cleanUp' }' ;
+  
+  % Event marker codes for each state
+  P.evm = rt_det_template_event_marker( P.nam ) ;
   
   % Make copy of trial error name to value mapping
   P.err = gettrialerrors( true ) ;
@@ -103,6 +106,23 @@ rew = rewardsize( P.err.Correct , expcdf( WDUR , WAITAVG ) / WAITMAX , ...
 
 %%% DEFINE TASK STATES %%%
 
+% Special actions that are not executed by generic onEntry. Use only if
+% state onEntry function is not in a time critical part of the trial.
+AUXACT.HoldFix = { @( ) set( P.Fix , 'faceColor' , [ 255 , 255 , 255 ] ) };
+AUXACT.GetFix  = { @( ) set( P.Fix , 'faceColor' , [ 000 , 000 , 000 ] ) };
+AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
+                          P.RTstart.get_value( ) ) } ;
+AUXACT.cleanUp = { @( ) set( P.Fix    , 'visible' , false ) , ...
+                   @( ) set( P.Target , 'visible' , false ) } ;
+
+% Special actions executed when state is finished executing
+ENDACT.cleanUp = { @( ) EchoServer.Write( sprintf( 'End trial %d\n' , ...
+  TrialData.currentTrial ) ) } ;
+
+% Special constants for value of max reps
+MAXREP_DEFAULT = 2 ;
+MAXREP_GETFIX  = 100 ;
+
 % Table of states. Each row defines a state. Column order is: state name;
 % timeout duration; next state after timeout or max repetitions; wait event
 % list; next state(s) after wait event(s), latter two are string or cell of
@@ -112,7 +132,7 @@ rew = rewardsize( P.err.Correct , expcdf( WDUR , WAITAVG ) / WAITMAX , ...
 % include additional args.
 STATE_TABLE = ...
 {           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
-          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , {} ;
+          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'Auxiliary' , AUXACT.HoldFix } ;
              'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
          'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { P.Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
    'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
@@ -121,7 +141,7 @@ STATE_TABLE = ...
          'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixOut' } , { 'TargetSelected' , 'NothingSelected' } , {} ;
    'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
   'NothingSelected' ,    0 , 'Missed'         ,   'Waiting' , 'BrokenFix' , {} ;
-           'GetFix' , 1000 , 'LostFix'        ,     'FixIn' , 'HoldFix' , {} ;
+           'GetFix' , 1000 , 'LostFix'        ,     'FixIn' , 'HoldFix' , { 'Auxiliary' , AUXACT.GetFix } ;
 'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Trigger' , P.FalseAlarmFlag } ;
           'Ignored' ,    0 , 'cleanUp'        , {} , {} , {} ;
           'LostFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
@@ -130,35 +150,14 @@ STATE_TABLE = ...
     'EyeTrackError' ,    0 , 'cleanUp'        , {} , {} , {} ; 
        'FalseAlarm' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
-           'Failed' ,    0 , 'cleanUp'        , {} , {} , {} ;
-          'Correct' ,    0 , 'cleanUp'        , {} , {} , {} ;
-          'cleanUp' ,    0 , 'final'          , {} , {} , {} ;
+           'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 2 ) } ;
+          'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 1 ) , 'Auxiliary' , AUXACT.Correct } ;
+          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Auxiliary' , AUXACT.cleanUp } ;
 } ;
-
-% Special actions that are not executed by generic onEntry
-AUXACT.HoldFix = { @( ) set( P.Fix , 'faceColor' , [ 255 , 255 , 255 ] ) };
-AUXACT.GetFix  = { @( ) set( P.Fix , 'faceColor' , [ 000 , 000 , 000 ] ) };
-AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
-                          P.RTstart.get_value( ) ) , ...
-                   @( ) reward( rew( 1 ) ) , ...
-                   @( ) EchoServer.Write( '%8sReward %dms\n' , '' , rew( 1 ) ) } ;
-AUXACT.Failed  = { @( ) reward( rew( 2 ) ) , ...
-                   @( ) EchoServer.Write( '%8sReward %dms\n' , '' , rew( 2 ) ) } ;
-AUXACT.cleanUp = { @( ) set( P.Fix    , 'visible' , false ) , ...
-                   @( ) set( P.Target , 'visible' , false ) } ;
-
-% Special actions executed when state is finished executing
-ENDACT.cleanUp = { @( ) logmessage( sprintf( 'End trial %d' , ...
-  TrialData.currentTrial ) ) } ;
-
-% Special constants for value of max reps
-MAXREP_DEFAULT = 2 ;
-MAXREP_GETFIX  = 100 ;
 
 % Error check first trial, make sure that there is an event marker for
 % each state name
-if  TrialData.currentTrial == 1  &&  ...
-    ~ isequal( fieldnames( P.evm ) , STATE_TABLE( : , 1 ) )
+if  TrialData.currentTrial == 1 && ~isequal( P.nam , STATE_TABLE( : , 1 ) )
     
   error( 'Mismatched event and state names' )
   
@@ -215,14 +214,6 @@ for  row = 1 : size( STATE_TABLE , 1 )
   
 end % rows
 
-% States with special actions at beginning of state
-for  F = fieldnames( AUXACT )' , name = F{ 1 } ;
-  
-  % Append additional actions
-  states.( name ).onEntry = [ states.( name ).onEntry , AUXACT.( name ) ] ;
-  
-end % special onEntry actions
-
 % States with special action after having executed
 for  F = fieldnames( ENDACT )' , name = F{ 1 } ;
   
@@ -249,8 +240,8 @@ states = struct2cell( states ) ;
 createTrial( 'Start' , states{ : } )
 
 % Output to message log
-EchoServer.Write( sprintf( '\nStart trial %d\n%9sWait %dms\n' , ...
-  TrialData.currentTrial , '' , ceil( WDUR ) ) )
+EchoServer.Write( sprintf( '\n%s Start trial %d\n%9sWait %dms\n', ...
+  datestr( now , 'HH:MM:SS' ), TrialData.currentTrial, '', ceil( WDUR ) ) )
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%
