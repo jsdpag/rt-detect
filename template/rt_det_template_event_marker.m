@@ -17,8 +17,7 @@ function  e = rt_det_template_event_marker( states )
 % For a state with name <state>, these events are called:
 %   
 %   <state>_entry - Beginning of onEntry function calls, before any other
-%     onEntry function executes. This should be considered optional. Use it
-%     only if there is any onEntry activity that consumes time.
+%     onEntry function executes.
 %   
 %   <state>_start - Timer starts and counts down the state's duration.
 %     This should be considered mandatory and must always be the last to
@@ -31,9 +30,6 @@ function  e = rt_det_template_event_marker( states )
 %     execute in the onExit functions.
 %   
 %   <state>_exit - Finised executing all other onExit function calls.
-%     This should be considered optional. Use it only if there is any
-%     onExit activity that consumes time other than event marking
-%     <state>_end.
 % 
 % Two more event markers are defined to signal the beginning and end of a
 % text stream:
