@@ -7,7 +7,7 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-dbstop in rt_det_template.m at 14
+%dbstop in rt_det_template.m at 14
 %%% GLOBAL INITIALISATION %%%
 
 % Session's ARCADE config object
@@ -145,7 +145,7 @@ STATE_TABLE = ...
        'FalseAlarm' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 2 ) } ;
-          'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 1 ) , 'Auxiliary' , AUXACT.Correct } ;
+          'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 1 ) } ;
           'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'StimProp' , { P.Fix , 'visible' , false , P.Target , 'visible' , false } } ;
 } ;
 

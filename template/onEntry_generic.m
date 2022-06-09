@@ -20,7 +20,7 @@ function  onEntry_generic( a )
     
     % Dynamic change to stimulus property values
     if  flg.StimProp
-      for  i = 1 : flg.StimProp , set( flg.StimProp{ : , i } ) ; end
+      for  i = 1 : flg.StimProp , set( a.StimProp{ : , i } ) ; end
     end
     
     % Flip stimulus visibility for ...
@@ -87,7 +87,7 @@ function  onEntry_generic( a )
   end
   
   % Print state name with time stamp
-  EchoServer.Write( '%s %s\n%s' , ts , a.State.name , rs ) ;
+  EchoServer.Write( sprintf( '%s %s\n%s' , ts , a.State.name , rs ) ) ;
   
   % Register trial error code on current trial
   if  flg.TrialError , trialerror( a.TrialError ) , end
