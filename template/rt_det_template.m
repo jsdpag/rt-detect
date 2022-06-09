@@ -27,7 +27,7 @@ if  TrialData.currentTrial == 1
             'Failed' , 'Correct' , 'cleanUp' }' ;
   
   % Event marker codes for each state
-  P.evm = rt_det_template_event_marker( P.nam ) ;
+  [ P.evm , P.evh ] = rt_det_template_event_marker( P.nam ) ;
   
   % Make copy of trial error name to value mapping
   P.err = gettrialerrors( true ) ;
@@ -106,7 +106,8 @@ rew = rewardsize( P.err.Correct , expcdf( WDUR , WAITAVG ) / WAITMAX , ...
 
 %%% DEFINE TASK STATES %%%
 
-% Special actions executed when state is finished executing
+% Special actions executed when state is finished executing. Remember to
+% make this a column vector of cells.
 ENDACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
                           P.RTstart.get_value( ) ) } ;
 ENDACT.cleanUp = { @( ) EchoServer.Write( sprintf( 'End trial %d\n' , ...
@@ -200,10 +201,7 @@ for  row = 1 : size( STATE_TABLE , 1 )
   states.( name ).onEntry = { @( ) onEntry_generic( a ) } ;
   
   % onExit marker values
-  exmval = [ P.evm.( [ name , '_end'  ] ) ;
-             P.evm.( [ name , '_exit' ] ) ] ;
-  states.( name ).onExit = { @( ) eventmarker( exmval( 1 ) ) ;
-                             @( ) eventmarker( exmval( 2 ) ) } ;
+  states.( name ).onExit = P.evh.( name ) ;
   
 end % rows
 

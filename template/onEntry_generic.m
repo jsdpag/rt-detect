@@ -44,10 +44,18 @@ function  onEntry_generic( a )
   if  flg.grpstim , groupStimuli( 'end' ) , end
   
   % Reset events
-  for  i = 1 : numel( a.Reset ) , a.Reset( i ).reset , end
+  if  flg.Reset == 1
+    a.Reset.reset ;
+  elseif  flg.Reset
+    for  i = 1 : numel( a.Reset ) , a.Reset( i ).reset , end
+  end
   
   % Trigger events
-  for  i = 1 : numel( a.Trigger ) , a.Trigger( i ).trigger , end
+  if  flg.Trigger == 1
+    a.Trigger.trigger ;
+  elseif  flg.Trigger
+    for  i = 1 : numel( a.Trigger ) , a.Trigger( i ).trigger , end
+  end
   
   % Time zero is defined
   if  flg.TimeZero

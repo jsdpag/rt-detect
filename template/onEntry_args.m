@@ -119,11 +119,13 @@ function  ain = onEntry_args( varargin )
   % Stim/Prop/Val set
   ain.StimProp = reshape( ain.StimProp( : ) , 3 , [ ] ) ;
   
-  % Stim and StimProp flags contain number of items
-  flg.Stim     = numel( ain.Stim ) ;
+  % Stim, StimProp, Reset, & Trigger flags contain number of items
+  flg.Stim     = numel( ain.Stim    ) ;
   flg.StimProp =  size( ain.StimProp , 2 ) ;
+  flg.Reset    = numel( ain.Reset   ) ;
+  flg.Trigger  = numel( ain.Trigger ) ;
   
-    % There is only one stimulus, so point to it directly
+    % There is only one item, so point to it directly
     if  flg.Stim == 1 , ain.Stim = ain.Stim{ 1 } ; end
   
   % Create an additional flag. Raise this if it is necessary to group

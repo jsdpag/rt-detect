@@ -1,7 +1,7 @@
 
-function  e = rt_det_template_event_marker( states )
+function  [ e , h ] = rt_det_template_event_marker( states )
 % 
-% e = rt_det_template_event_marker( states )
+% [ e , h ] = rt_det_template_event_marker( states )
 % 
 % Creates unsigned 16-bit integer codes for each state named in states, a
 % cell array of strings. Discards special values 1, used by ARCADE for init
@@ -10,7 +10,11 @@ function  e = rt_det_template_event_marker( states )
 % 65534 & 65535 (2^16-[2,1] i.e. intmax( 'uint16' )-[2,1]) to signal the
 % start and end of a text stream (see below). All state names must be valid
 % MATLAB field names. Returns struct e, where each field names an event and
-% contains its numeric code i.e. marker.
+% contains its numeric code i.e. marker. Also returns struct h, where each
+% field is named after a string in states, and contains a cell array with
+% two anonymous function handles; the first trigger's the named state's
+% *_end event marker, and the second triggers the same state's *_exit
+% marker.
 % 
 % Four unique event markers are assigned to each state to time-stamp the
 % following events, each time that the state executes (State.run() called).
@@ -121,6 +125,15 @@ function  e = rt_det_template_event_marker( states )
       e.( [ nam , '_' , suffix ] ) = val ;
       
     end % state events
+    
+    % State's *_end and *_exit event marker codes
+    emcend  = e.( [ nam , '_end'  ] ) ;
+    emcexit = e.( [ nam , '_exit' ] ) ;
+    
+    % Build h
+    h.( nam ) = { @( ) eventmarker( emcend  ) ;
+                  @( ) eventmarker( emcexit ) } ;
+    
   end % states
   
   % Text stream events
