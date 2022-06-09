@@ -14,15 +14,28 @@ function  onEntry_generic( a )
   
   % *_entry event marker
   if  flg.Marker_entry , eventmarker( a.Marker_entry ) ; end
-  
-  % Execute any auxiliary actions, now
-  if  flg.Auxiliary , for  fh = a.Auxiliary , fh( ) ; end , end
 
   % Begin stimulus grouping
   if  flg.grpstim , groupStimuli( 'start' ) , end
-  
-    % Flip stimulus visibility
-    for  S = a.Stim , s = S{ 1 } ; s.visible = ~ s.visible ; end
+    
+    % Dynamic change to stimulus property values
+    if  flg.StimProp
+      for  i = 1 : flg.StimProp , set( flg.StimProp{ : , i } ) ; end
+    end
+    
+    % Flip stimulus visibility for ...
+    
+      % ... just one stimulus
+      if  flg.Stim == 1
+        
+        a.Stim.visible = ~ a.Stim.visible ;
+        
+      % Multiple stimuli
+      elseif  flg.Stim
+        
+        for  S = a.Stim , s = S{ 1 } ; s.visible = ~ s.visible ; end
+        
+      end % flip visibility
 
     % Change state of photodiode
     if  flg.Photodiode , photodiode( a.Photodiode ) , end

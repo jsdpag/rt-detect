@@ -28,8 +28,12 @@ function  ain = onEntry_args( varargin )
 % 'RunTimeVal' - Handle to StateRuntimeVariable in which elapsed seconds
 %                since time zero is stored.
 %     'Reward' - Scalar integer, reward size in milliseconds.
-%  'Auxiliary' - Cell array of function handles containing additional
-%                actions for special cases.
+%   'StimProp' - Cell array listing a Stimulus object, its property name,
+%                and new property value in sets of 3. Each set of 3
+%                occupies three contiguous cells through linear indexing.
+%                For the ith set, the Stimulus handle, property name, and
+%                property value can be obtained by: [ stimhandle, propname,
+%                  propvalue ] = C{3*(i-1) + (1:3)}.
 % 
 % Additional field ain.flg is a struct with fields listed above, but each
 % contains a scalar logical indicating whether or not the Name/Value pair
@@ -43,7 +47,7 @@ function  ain = onEntry_args( varargin )
   % Default ain field name set
   ain = { 'State', 'Marker_entry', 'Marker_start', 'Stim', 'Reset', ...
     'Trigger', 'TrialError', 'Photodiode', 'TimeZero', 'RunTimeVal', ...
-      'Reward' , 'Auxiliary' } ;
+      'Reward' , 'StimProp' } ;
   
   % Valid input for photodiode( )
   phostr = { 'on' , 'off' , 'toggle' , 'flicker' } ;
@@ -63,8 +67,9 @@ function  ain = onEntry_args( varargin )
   ech.RunTimeVal = @( v ) isscalar( v ) && ...
     isa( v , 'StateRuntimeVariable' ) ;
   ech.Reward = @( v ) isscalar( v ) && isnatnum( v ) ;
-  ech.Auxiliary = @( v ) iscell( v ) && ...
-    all( cellfun( @( v ) isa( v , 'function_handle' ) , v ) ) ;
+  ech.StimProp = @( v ) iscell( v ) && ~mod( numel( v ) , 3 ) && ...
+    all( cellfun( @( v ) isa( v , 'Stimulus' ) , v( 1 : 3 : end ) )  &  ...
+         cellfun( @( v ) isrow( v ) && ischar( v ), v( 2 : 3 : end ) ) ) ;
   
   % Error messages
   ems.State = 'ARCADE State' ;
@@ -79,7 +84,7 @@ function  ain = onEntry_args( varargin )
   ems.TimeZero = ems.State ;
   ems.RunTimeVal = 'StateRuntimeVariable' ;
   ems.Reward = 'natural number' ;
-  ems.Auxiliary = 'cell array of function handles' ;
+  ems.StimProp = 'cell array of sets with form Stimulus,Property,Value' ;
   
   % Append second row of empty double arrays
   ain = [ ain ; cell( size( ain ) ) ] ;
@@ -110,19 +115,24 @@ function  ain = onEntry_args( varargin )
     
   end % name/val
   
+  % Re-arrange stimulus property changes so that each column has one
+  % Stim/Prop/Val set
+  ain.StimProp = reshape( ain.StimProp( : ) , 3 , [ ] ) ;
+  
+  % Stim and StimProp flags contain number of items
+  flg.Stim     = numel( ain.Stim ) ;
+  flg.StimProp =  size( ain.StimProp , 2 ) ;
+  
+    % There is only one stimulus, so point to it directly
+    if  flg.Stim == 1 , ain.Stim = ain.Stim{ 1 } ; end
+  
   % Create an additional flag. Raise this if it is necessary to group
-  % stimuli before drawing the next frame. This is the case when there are
-  % more than one stimulus and/or at least one stimulus with a photodiode
-  % change.
-  flg.grpstim = numel( ain.Stim ) > 1  ||  ( flg.Stim && flg.Photodiode ) ;
+  % stimuli before drawing the next frame. This is the case when there is
+  % more than one stimulus action + photodiode state change.
+  flg.grpstim = 1  <  ( flg.Stim + flg.Photodiode + flg.StimProp ) ;
   
   % Store flags in return struct
   ain.flg = flg ;
-  
-  % Guarantee that auxiliary actions are stored in a row cell array
-  if  flg.Auxiliary  &&  ~ isrow( ain.Auxiliary )
-    ain.Auxiliary = ain.Auxiliary( : )' ;
-  end
   
 end % argstruct
 

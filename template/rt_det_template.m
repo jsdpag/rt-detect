@@ -106,16 +106,9 @@ rew = rewardsize( P.err.Correct , expcdf( WDUR , WAITAVG ) / WAITMAX , ...
 
 %%% DEFINE TASK STATES %%%
 
-% Special actions that are not executed by generic onEntry. Use only if
-% state onEntry function is not in a time critical part of the trial.
-AUXACT.HoldFix = { @( ) set( P.Fix , 'faceColor' , [ 255 , 255 , 255 ] ) };
-AUXACT.GetFix  = { @( ) set( P.Fix , 'faceColor' , [ 000 , 000 , 000 ] ) };
-AUXACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
-                          P.RTstart.get_value( ) ) } ;
-AUXACT.cleanUp = { @( ) set( P.Fix    , 'visible' , false ) , ...
-                   @( ) set( P.Target , 'visible' , false ) } ;
-
 % Special actions executed when state is finished executing
+ENDACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
+                          P.RTstart.get_value( ) ) } ;
 ENDACT.cleanUp = { @( ) EchoServer.Write( sprintf( 'End trial %d\n' , ...
   TrialData.currentTrial ) ) } ;
 
@@ -132,7 +125,7 @@ MAXREP_GETFIX  = 100 ;
 % include additional args.
 STATE_TABLE = ...
 {           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
-          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'Auxiliary' , AUXACT.HoldFix } ;
+          'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 255 , 255 , 255 ] } } ;
              'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
          'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { P.Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
    'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
@@ -141,7 +134,7 @@ STATE_TABLE = ...
          'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixOut' } , { 'TargetSelected' , 'NothingSelected' } , {} ;
    'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
   'NothingSelected' ,    0 , 'Missed'         ,   'Waiting' , 'BrokenFix' , {} ;
-           'GetFix' , 1000 , 'LostFix'        ,     'FixIn' , 'HoldFix' , { 'Auxiliary' , AUXACT.GetFix } ;
+           'GetFix' , 1000 , 'LostFix'        ,     'FixIn' , 'HoldFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 000 , 000 , 000 ] } } ;
 'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Trigger' , P.FalseAlarmFlag } ;
           'Ignored' ,    0 , 'cleanUp'        , {} , {} , {} ;
           'LostFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
@@ -152,7 +145,7 @@ STATE_TABLE = ...
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 2 ) } ;
           'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 1 ) , 'Auxiliary' , AUXACT.Correct } ;
-          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Auxiliary' , AUXACT.cleanUp } ;
+          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'StimProp' , { P.Fix , 'visible' , false , P.Target , 'visible' , false } } ;
 } ;
 
 % Error check first trial, make sure that there is an event marker for
