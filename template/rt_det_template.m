@@ -7,7 +7,7 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-%dbstop in rt_det_template.m at 14
+% dbstop in rt_det_template.m at 127
 %%% GLOBAL INITIALISATION %%%
 
 % Session's ARCADE config object
@@ -21,7 +21,7 @@ if  TrialData.currentTrial == 1
   % Define state names, column of cells
   P.nam = { 'Start' , 'HoldFix' , 'Wait' , 'TargetOn' , ...
     'ResponseWindow' , 'Saccade' , 'GetSaccadeTarget' , 'Evaluate' , ...
-      'TargetSelected' , 'NothingSelected' , 'GetFix' , ...
+      'TargetSelected' , 'Microsaccade' , 'NothingSelected' , 'GetFix' ,...
         'FalseAlarmSaccade' , 'Ignored' , 'LostFix' , 'BrokenFix' , ...
           'BrokenSaccade' , 'EyeTrackError' , 'FalseAlarm' , 'Missed' , ...
             'Failed' , 'Correct' , 'cleanUp' }' ;
@@ -50,15 +50,15 @@ if  TrialData.currentTrial == 1
   
     P.Fix.position = [ 0 , 0 ] ;
     P.Fix.faceColor( : ) = 255 ;
-    P.Fix.width = 10 ;
-    P.Fix.height = 10 ;
+    P.Fix.width = sqrt( pi * 0.15 ^ 2 ) * P.pixperdeg ;
+    P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
   
   P.Target = Gaussian ;
   
-    P.Target.position = [ +420 , -262 ] ;
-    P.Target.sdx = 80 ;
-    P.Target.sdy = 80 ;
+    P.Target.position = sqrt( 4 ^ 2 / 2 ) .* [ 1 , -1 ] * P.pixperdeg ;
+    P.Target.sdx = 1.5 * P.pixperdeg ;
+    P.Target.sdy = P.Target.sdx ;
     P.Target.color( : ) = 255 ;
   
   % Make reaction time start and end time variables
@@ -69,8 +69,8 @@ if  TrialData.currentTrial == 1
   persist( P )
   
   % Create fixation and target eye windows
-  trackeye( P.Fix.position    ,  50 , 'Fix'    ) ;
-  trackeye( P.Target.position , 200 , 'Target' ) ;
+  trackeye( P.Fix.position    ,  0.85 * P.pixperdeg , 'Fix'    ) ;
+  trackeye( P.Target.position , 2 * P.Target.sdx , 'Target' ) ;
   
 % Retrieve persistent data
 else
@@ -132,8 +132,9 @@ STATE_TABLE = ...
    'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
           'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
  'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
-         'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixOut' } , { 'TargetSelected' , 'NothingSelected' } , {} ;
+         'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixIn' , 'FixOut' } , { 'TargetSelected' , 'Microsaccade' , 'NothingSelected' } , {} ;
    'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
+     'Microsaccade' ,    0 , 'EyeTrackError'  , {} , {} , {} ;
   'NothingSelected' ,    0 , 'Missed'         ,   'Waiting' , 'BrokenFix' , {} ;
            'GetFix' , 1000 , 'LostFix'        ,     'FixIn' , 'HoldFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 000 , 000 , 000 ] } } ;
 'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Trigger' , P.FalseAlarmFlag } ;
