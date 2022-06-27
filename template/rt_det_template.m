@@ -18,11 +18,14 @@ cfg = retrieveConfig ;
 
 if  TrialData.currentTrial == 1
   
+  % Handle to session's behavioural store object
+  P.bhv = SGLBehaviouralStore.launch ;
+  
   % Define state names, column of cells
   P.nam = { 'Start' , 'HoldFix' , 'Wait' , 'TargetOn' , ...
     'ResponseWindow' , 'Saccade' , 'GetSaccadeTarget' , 'Evaluate' , ...
       'TargetSelected' , 'Microsaccade' , 'NothingSelected' , 'GetFix' ,...
-        'FalseAlarmSaccade' , 'Ignored' , 'LostFix' , 'BrokenFix' , ...
+        'FalseAlarmSaccade' , 'Ignored' , 'Blink' , 'BrokenFix' , ...
           'BrokenSaccade' , 'EyeTrackError' , 'FalseAlarm' , 'Missed' , ...
             'Failed' , 'Correct' , 'cleanUp' }' ;
   
@@ -34,7 +37,7 @@ if  TrialData.currentTrial == 1
   
   % Open Win32 inter-process communication events
   for  E = { 'StartSacc' , 'EndSacc' , 'StartFix' , 'FalseAlarmFlag' , ...
-      'Waiting' }
+      'Waiting' , 'BlinkStart' , 'BlinkEnd' }
     name = E{ 1 } ;
     P.( name ) = IPCEvent( name ) ;
   end
@@ -108,10 +111,20 @@ rew = rewardsize( P.err.Correct , expcdf( WDUR , WAITAVG ) / WAITMAX , ...
 
 % Special actions executed when state is finished executing. Remember to
 % make this a column vector of cells.
-ENDACT.Correct = { @( ) reactiontime( 'writeRT' , P.RTend.get_value( ) -...
-                          P.RTstart.get_value( ) ) } ;
-ENDACT.cleanUp = { @( ) EchoServer.Write( sprintf( 'End trial %d\n' , ...
-  TrialData.currentTrial ) ) } ;
+
+  % Correct state. Calculate reaction time, convert unit from seconds to
+  % milliseconds. Report RT.
+  ENDACT.Correct = ...
+    { @( ) reactiontime( 'writeRT' , 1e3 * ( P.RTend.get_value( ) - ...
+             P.RTstart.get_value( ) ) ) ;
+      @( ) EchoServer.Write( sprintf( '%8sRT %dms\n' , '' , ...
+             ceil( P.bhv.reactionTime( P.bhv.currentTrial ) ) ) ) } ;
+  
+  % cleanUp prints one final message to show that all State objects have
+  % finished executing and that control is returning to ARCADE's inter-
+  % trial code.
+  ENDACT.cleanUp = { @( ) EchoServer.Write( sprintf( 'End trial %d\n' , ...
+    TrialData.currentTrial ) ) } ;
 
 % Special constants for value of max reps
 MAXREP_DEFAULT = 2 ;
@@ -127,19 +140,19 @@ MAXREP_GETFIX  = 100 ;
 STATE_TABLE = ...
 {           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
           'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 255 , 255 , 255 ] } } ;
-             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
+             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
          'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { P.Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
    'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
-          'Saccade' ,  125 , 'BrokenSaccade'  ,   'EndSacc' , 'GetSaccadeTarget' , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
+          'Saccade' ,  125 , 'BrokenSaccade'  ,  { 'BlinkStart' , 'EndSacc' } , { 'Blink' , 'GetSaccadeTarget' } , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
  'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
          'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixIn' , 'FixOut' } , { 'TargetSelected' , 'Microsaccade' , 'NothingSelected' } , {} ;
    'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
      'Microsaccade' ,    0 , 'EyeTrackError'  , {} , {} , {} ;
   'NothingSelected' ,    0 , 'Missed'         ,   'Waiting' , 'BrokenFix' , {} ;
-           'GetFix' , 1000 , 'LostFix'        ,     'FixIn' , 'HoldFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 000 , 000 , 000 ] } } ;
+           'GetFix' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 000 , 000 , 000 ] } } ;
 'FalseAlarmSaccade' ,    0 , 'Saccade'        , {} , {} , { 'Trigger' , P.FalseAlarmFlag } ;
           'Ignored' ,    0 , 'cleanUp'        , {} , {} , {} ;
-          'LostFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
+            'Blink' , 5000 , 'cleanUp'        , 'BlinkEnd' , 'cleanUp' , {} ;
         'BrokenFix' ,    0 , 'cleanUp'        , {} , {} , {} ;
     'BrokenSaccade' ,    0 , 'cleanUp'        , {} , {} , {} ;
     'EyeTrackError' ,    0 , 'cleanUp'        , {} , {} , {} ; 
