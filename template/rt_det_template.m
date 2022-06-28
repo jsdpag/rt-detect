@@ -7,7 +7,7 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-% dbstop in rt_det_template.m at 127
+% dbstop in rt_det_template.m at 14
 %%% GLOBAL INITIALISATION %%%
 
 % Session's ARCADE config object
@@ -49,20 +49,20 @@ if  TrialData.currentTrial == 1
       cfg.MonitorDiagonalSize ) ;
   
   % Create fixation and target stimulus handles
+  P.Target = Gaussian ;
+  
+    P.Target.position = sqrt( 8 ^ 2 / 2 ) .* [ 1 , -1 ] * P.pixperdeg ;
+    P.Target.sdx = 1.5 * P.pixperdeg ;
+    P.Target.sdy = P.Target.sdx ;
+    P.Target.color( : ) = 255 ;
+    
   P.Fix = Rectangle ;
   
     P.Fix.position = [ 0 , 0 ] ;
     P.Fix.faceColor( : ) = 255 ;
-    P.Fix.width = sqrt( pi * 0.15 ^ 2 ) * P.pixperdeg ;
+    P.Fix.width = sqrt( pi * 0.075 ^ 2 ) * P.pixperdeg ;
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
-  
-  P.Target = Gaussian ;
-  
-    P.Target.position = sqrt( 4 ^ 2 / 2 ) .* [ 1 , -1 ] * P.pixperdeg ;
-    P.Target.sdx = 1.5 * P.pixperdeg ;
-    P.Target.sdy = P.Target.sdx ;
-    P.Target.color( : ) = 255 ;
   
   % Make reaction time start and end time variables
   P.RTstart = StateRuntimeVariable ;
@@ -70,10 +70,6 @@ if  TrialData.currentTrial == 1
   
   % Keep persistent store of IPCEvent handles
   persist( P )
-  
-  % Create fixation and target eye windows
-  trackeye( P.Fix.position    ,  0.85 * P.pixperdeg , 'Fix'    ) ;
-  trackeye( P.Target.position , 2 * P.Target.sdx , 'Target' ) ;
   
 % Retrieve persistent data
 else
@@ -85,26 +81,54 @@ end % first trial init
 
 %%% Trial variables %%%
 
-% These will become user variables
-WAITAVG = 1500 ;
-WAITMAX = 0.95 ;
-REWARD_SLOPE =  1.5 ;
-REWARD_MAX   =  150 ;
-REWARD_MIN   =   20 ;
-REWARD_FAIL  = 0.25 ;
+% Error check editable variables
+v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , BaselineMs , ...
+  WaitAvgMs , FixTolDeg , WaitMaxProb , RewardSlope , RewardMinMs , ...
+    RewardFailFrac , ScreenGamma ) ;
+
+% Convert variables with degrees into pixels, without destroying original
+% value in degrees
+for  F = { 'RfXDeg' , 'RfYDeg' , 'RfRadDeg' , 'FixTolDeg' } ; f = F{ 1 } ;
+  
+  v.( f ) = v.( f ) * P.pixperdeg ;
+  
+end % deg2pix
 
 % Sample wait duration
-WDUR = min( exprnd( WAITAVG ) , expinv( WAITMAX , WAITAVG ) ) ;
+WaitMs = min( exprnd( WaitAvgMs ) , expinv( WaitMaxProb , WaitAvgMs ) ) ;
 
 % Compute reward size for correct performance
-rew = rewardsize( P.err.Correct , expcdf( WDUR , WAITAVG ) / WAITMAX , ...
-  REWARD_SLOPE , REWARD_MAX ) ;
+rew = rewardsize( P.err.Correct , ...
+  expcdf( WaitMs , WaitAvgMs ) / WaitMaxProb , RewardSlope , RewardMaxMs ) ;
   
   % And for failed trial [ correct reward , failed reward ]
-  rew = [ rew , REWARD_FAIL * rew ] ;
+  rew = [ rew , RewardFailFrac * rew ] ;
   
   % Round up to next millisecond and guarantee minimum reward size
-  rew = max( REWARD_MIN , ceil( rew ) ) ;
+  rew = max( RewardMinMs , ceil( rew ) ) ;
+  
+% Add baseline period
+WaitMs = WaitMs  +  BaselineMs ;
+
+% Ask StimServer.exe to apply a measure of luminance Gamma correction
+StimServer.InvertGammaCorrection( ScreenGamma ) ;
+
+
+%%% Eye Tracking %%%
+
+% Delete any existing eye window
+trackeye( 'reset' ) ;
+
+% Create fixation and target eye windows
+trackeye(               [ 0 , 0 ] , v.FixTolDeg , 'Fix'    ) ;
+trackeye( [ v.RfXDeg , v.RfYDeg ] , v.RfRadDeg  , 'Target' ) ;
+
+
+%%% Stimulus configuration %%%
+
+P.Target.position = [ v.RfXDeg , v.RfYDeg ] ;
+P.Target.sdx = v.RfRadDeg / 3 ;
+P.Target.sdy = P.Target.sdx ;
 
 
 %%% DEFINE TASK STATES %%%
@@ -140,7 +164,7 @@ MAXREP_GETFIX  = 100 ;
 STATE_TABLE = ...
 {           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
           'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 255 , 255 , 255 ] } } ;
-             'Wait' , WDUR , 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
+             'Wait' ,WaitMs, 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
          'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { P.Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
    'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
           'Saccade' ,  125 , 'BrokenSaccade'  ,  { 'BlinkStart' , 'EndSacc' } , { 'Blink' , 'GetSaccadeTarget' } , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
@@ -245,8 +269,10 @@ states = struct2cell( states ) ;
 createTrial( 'Start' , states{ : } )
 
 % Output to message log
-EchoServer.Write( sprintf( '\n%s Start trial %d\n%9sWait %dms\n', ...
-  datestr( now , 'HH:MM:SS' ), TrialData.currentTrial, '', ceil( WDUR ) ) )
+EchoServer.Write( sprintf( [ '\n%s Start trial %d\n' , ...
+  '%9sWait %dms = %d + %d\n' ] , datestr( now , 'HH:MM:SS' ) , ...
+    TrialData.currentTrial , '' , ceil( WaitMs ) , ceil( BaselineMs ) , ...
+      ceil( WaitMs - BaselineMs ) ) )
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%
