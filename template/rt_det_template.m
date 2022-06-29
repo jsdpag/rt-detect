@@ -48,6 +48,10 @@ if  TrialData.currentTrial == 1
             str2double( cfg.MonitorResolution.height ) ^ 2 ) / ...
       cfg.MonitorDiagonalSize ) ;
   
+  % Previous trial eye track window parameters
+  P.EyeTrack = struct( 'RfXDeg' , [] , 'RfYDeg' , [] , 'RfRadDeg' , [] ,...
+    'FixTolDeg' , [] ) ;
+  
   % Create fixation and target stimulus handles
   P.Target = Gaussian ;
   
@@ -64,12 +68,14 @@ if  TrialData.currentTrial == 1
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
   
-  % Make reaction time start and end time variables
-  P.RTstart = StateRuntimeVariable ;
-  P.RTend   = StateRuntimeVariable ;
+  % Make reaction time start and end time variables, and tic time
+  % measurement at end of previous trial for ITI measure
+  P.RTstart  = StateRuntimeVariable ;
+  P.RTend    = StateRuntimeVariable ;
+  P.ITIstart = StateRuntimeVariable ;
   
-  % Keep persistent store of IPCEvent handles
-  persist( P )
+    % Initialise P.ITIstart to zero, so that we don't wait on first trial
+    P.ITIstart.value = zeros( 1 , 'uint64' ) ;
   
 % Retrieve persistent data
 else
@@ -84,13 +90,13 @@ end % first trial init
 % Error check editable variables
 v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , BaselineMs , ...
   WaitAvgMs , FixTolDeg , WaitMaxProb , RewardSlope , RewardMinMs , ...
-    RewardFailFrac , ScreenGamma ) ;
+    RewardFailFrac , ScreenGamma , ItiMinMs ) ;
 
 % Convert variables with degrees into pixels, without destroying original
 % value in degrees
 for  F = { 'RfXDeg' , 'RfYDeg' , 'RfRadDeg' , 'FixTolDeg' } ; f = F{ 1 } ;
   
-  v.( f ) = v.( f ) * P.pixperdeg ;
+  vpix.( f ) = v.( f ) * P.pixperdeg ;
   
 end % deg2pix
 
@@ -99,7 +105,7 @@ WaitMs = min( exprnd( WaitAvgMs ) , expinv( WaitMaxProb , WaitAvgMs ) ) ;
 
 % Compute reward size for correct performance
 rew = rewardsize( P.err.Correct , ...
-  expcdf( WaitMs , WaitAvgMs ) / WaitMaxProb , RewardSlope , RewardMaxMs ) ;
+  expcdf( WaitMs , WaitAvgMs ) / WaitMaxProb , RewardSlope , RewardMaxMs );
   
   % And for failed trial [ correct reward , failed reward ]
   rew = [ rew , RewardFailFrac * rew ] ;
@@ -116,18 +122,32 @@ StimServer.InvertGammaCorrection( ScreenGamma ) ;
 
 %%% Eye Tracking %%%
 
-% Delete any existing eye window
-trackeye( 'reset' ) ;
+% Check to see if any eye tracking window params have changed since last
+% trial, because editable variables were changed during task pause. Don't
+% reset and rebuild windows if unnecessary because trackeye wastes 500ms on
+% each reset (as of ARCADE v2.6).
+if  ~ all(  cellfun( @( f ) isequal( v.( f ) , P.EyeTrack.( f ) ) , ...
+    fieldnames( P.EyeTrack ) )  )
 
-% Create fixation and target eye windows
-trackeye(               [ 0 , 0 ] , v.FixTolDeg , 'Fix'    ) ;
-trackeye( [ v.RfXDeg , v.RfYDeg ] , v.RfRadDeg  , 'Target' ) ;
+  % Delete any existing eye window
+  trackeye( 'reset' ) ;
+
+  % Create fixation and target eye windows
+  trackeye(                     [ 0 , 0 ] , vpix.FixTolDeg , 'Fix'    ) ;
+  trackeye( [ vpix.RfXDeg , vpix.RfYDeg ] , vpix.RfRadDeg  , 'Target' ) ;
+  
+  % Remember new values
+  for  F = fieldnames( P.EyeTrack )' , f = F{ 1 } ;
+    P.EyeTrack.( f ) = v.( f ) ;
+  end
+
+end % update eye windows
 
 
 %%% Stimulus configuration %%%
 
-P.Target.position = [ v.RfXDeg , v.RfYDeg ] ;
-P.Target.sdx = v.RfRadDeg / 3 ;
+P.Target.position = [ vpix.RfXDeg , vpix.RfYDeg ] ;
+P.Target.sdx = vpix.RfRadDeg / 3 ;
 P.Target.sdy = P.Target.sdx ;
 
 
@@ -141,14 +161,15 @@ P.Target.sdy = P.Target.sdx ;
   ENDACT.Correct = ...
     { @( ) reactiontime( 'writeRT' , 1e3 * ( P.RTend.get_value( ) - ...
              P.RTstart.get_value( ) ) ) ;
-      @( ) EchoServer.Write( sprintf( '%8sRT %dms\n' , '' , ...
-             ceil( P.bhv.reactionTime( P.bhv.currentTrial ) ) ) ) } ;
+      @( ) EchoServer.Write( '%8sRT %dms\n' , '' , ...
+             ceil( P.bhv.reactionTime( P.bhv.currentTrial ) ) ) } ;
   
-  % cleanUp prints one final message to show that all State objects have
-  % finished executing and that control is returning to ARCADE's inter-
-  % trial code.
-  ENDACT.cleanUp = { @( ) EchoServer.Write( sprintf( 'End trial %d\n' , ...
-    TrialData.currentTrial ) ) } ;
+  % cleanUp measures time that inter-trial-interval starts, then prints one
+  % final message to show that all State objects have finished executing
+  % and that control is returning to ARCADE's inter-trial code.
+  ENDACT.cleanUp = ...
+    { @( ) P.ITIstart.set_value( tic ) ;
+      @( ) EchoServer.Write( 'End trial %d\n' , TrialData.currentTrial ) };
 
 % Special constants for value of max reps
 MAXREP_DEFAULT = 2 ;
@@ -268,11 +289,20 @@ P.Fix.faceColor( : ) = 0 ;
 states = struct2cell( states ) ;
 createTrial( 'Start' , states{ : } )
 
+
+% Complete inter-trial-interval, measured from the end of the previous
+% trial
+sleep( max( 0 , ItiMinMs - 1e3 * toc( P.ITIstart.value ) ) )
+
 % Output to message log
-EchoServer.Write( sprintf( [ '\n%s Start trial %d\n' , ...
-  '%9sWait %dms = %d + %d\n' ] , datestr( now , 'HH:MM:SS' ) , ...
-    TrialData.currentTrial , '' , ceil( WaitMs ) , ceil( BaselineMs ) , ...
-      ceil( WaitMs - BaselineMs ) ) )
+EchoServer.Write( '\n%s Start trial %d\n%9sWait %dms = %d + %d\n' , ...
+  datestr( now , 'HH:MM:SS' ) , TrialData.currentTrial , '' , ...
+    ceil( WaitMs ) , ceil( BaselineMs ) , ceil( WaitMs - BaselineMs ) )
+
+
+%%% Update script's persistent variables %%%
+
+persist( P )
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%

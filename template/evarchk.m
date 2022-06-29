@@ -1,7 +1,7 @@
 
 function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   BaselineMs , WaitAvgMs , FixTolDeg , WaitMaxProb , RewardSlope , ...
-    RewardMinMs , RewardFailFrac , ScreenGamma )
+    RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs )
 % 
 % evarchk( <ARCADE editable variables> )
 % 
@@ -22,6 +22,7 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   lim.RewardMinMs = [ 0 , Inf ] ;
   lim.RewardFailFrac = [ 0 , 1 ] ;
   lim.ScreenGamma = [ 0 , Inf ] ;
+  lim.ItiMinMs = [ 0 , Inf ] ;
   
   % Pack input into struct
   v.RewardMaxMs = RewardMaxMs ;
@@ -36,6 +37,7 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   v.RewardMinMs = RewardMinMs ;
   v.RewardFailFrac = RewardFailFrac ;
   v.ScreenGamma = ScreenGamma ;
+  v.ItiMinMs = ItiMinMs ;
   
   % Numeric variables
   for  N = fieldnames( v )' ; n = N{ 1 } ;
