@@ -1,6 +1,6 @@
 
 % 
-% rt_det_template.m
+% rt_detection.m
 % 
 % Use Win32 Start/EndFix, Start/EndSacc events from EyeLinkServer to
 % control the timing on states in this training version of the reaction
