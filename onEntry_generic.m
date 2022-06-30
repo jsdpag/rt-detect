@@ -39,6 +39,9 @@ function  onEntry_generic( a )
 
     % Change state of photodiode
     if  flg.Photodiode , photodiode( a.Photodiode ) , end
+    
+    % Change colour of screen background
+    if  flg.Background , StimServer.SetBackgroundColor( a.Background ); end
   
   % Finished stimulus grouping
   if  flg.grpstim , groupStimuli( 'end' ) , end

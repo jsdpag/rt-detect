@@ -103,6 +103,9 @@ end % deg2pix
 % Sample wait duration
 WaitMs = min( exprnd( WaitAvgMs ) , expinv( WaitMaxProb , WaitAvgMs ) ) ;
 
+  % Make a copy of this trial's waiting time, minus baseline
+  v.WaitMs = WaitMs ;
+
 % Compute reward size for correct performance
 rew = rewardsize( P.err.Correct , ...
   expcdf( WaitMs , WaitAvgMs ) / WaitMaxProb , RewardSlope , RewardMaxMs );
@@ -113,7 +116,7 @@ rew = rewardsize( P.err.Correct , ...
   % Round up to next millisecond and guarantee minimum reward size
   rew = max( RewardMinMs , ceil( rew ) ) ;
   
-% Add baseline period
+% Add baseline period, this is now the duration of the Wait state.
 WaitMs = WaitMs  +  BaselineMs ;
 
 % Ask StimServer.exe to apply a measure of luminance Gamma correction
@@ -183,7 +186,7 @@ MAXREP_GETFIX  = 100 ;
 % code, and time zero state handle are automatically generated; only
 % include additional args.
 STATE_TABLE = ...
-{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
+{           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'StimProp' , { P.Fix , 'faceColor' , [ 000 , 000 , 000 ] } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
           'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 255 , 255 , 255 ] } } ;
              'Wait' ,WaitMs, 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
          'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { P.Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
@@ -205,7 +208,7 @@ STATE_TABLE = ...
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 2 ) } ;
           'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 1 ) } ;
-          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'StimProp' , { P.Fix , 'visible' , false , P.Target , 'visible' , false } } ;
+          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'StimProp' , { P.Fix , 'visible' , false , P.Target , 'visible' , false } } ;
 } ;
 
 % Error check first trial, make sure that there is an event marker for
@@ -278,31 +281,26 @@ end % special onExit actions
 states.GetFix.maxRepetitions = MAXREP_GETFIX ;
 
 
-%%% Reset Stimuli %%%
-
-% Black fixation point
-P.Fix.faceColor( : ) = 0 ;
-
-
 %%% CREATE TRIAL %%%
 
 states = struct2cell( states ) ;
 createTrial( 'Start' , states{ : } )
 
-
-% Complete inter-trial-interval, measured from the end of the previous
-% trial
-sleep( max( 0 , ItiMinMs - 1e3 * toc( P.ITIstart.value ) ) )
-
 % Output to message log
 EchoServer.Write( '\n%s Start trial %d\n%9sWait %dms = %d + %d\n' , ...
   datestr( now , 'HH:MM:SS' ) , TrialData.currentTrial , '' , ...
-    ceil( WaitMs ) , ceil( BaselineMs ) , ceil( WaitMs - BaselineMs ) )
+    ceil( WaitMs ) , ceil( BaselineMs ) , ceil( v.WaitMs ) )
 
 
-%%% Update script's persistent variables %%%
+%%% Update script's persistent and user variables %%%
 
 persist( P )
+storeUserVariables( v )
+
+
+%%% Complete previous trial's inter-trial-interval %%%
+
+sleep( ItiMinMs  -  1e3 * toc( P.ITIstart.value ) )
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%

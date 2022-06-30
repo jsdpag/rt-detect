@@ -28,6 +28,8 @@ function  ain = onEntry_args( varargin )
 % 'RunTimeVal' - Handle to StateRuntimeVariable in which elapsed seconds
 %                since time zero is stored.
 %     'Reward' - Scalar integer, reward size in milliseconds.
+% 'Background' - RGB row vector specifying StimServer screen background
+%                colour.
 %   'StimProp' - Cell array listing a Stimulus object, its property name,
 %                and new property value in sets of 3. Each set of 3
 %                occupies three contiguous cells through linear indexing.
@@ -47,7 +49,7 @@ function  ain = onEntry_args( varargin )
   % Default ain field name set
   ain = { 'State', 'Marker_entry', 'Marker_start', 'Stim', 'Reset', ...
     'Trigger', 'TrialError', 'Photodiode', 'TimeZero', 'RunTimeVal', ...
-      'Reward' , 'StimProp' } ;
+      'Reward' , 'Background' , 'StimProp' } ;
   
   % Valid input for photodiode( )
   phostr = { 'on' , 'off' , 'toggle' , 'flicker' } ;
@@ -67,6 +69,8 @@ function  ain = onEntry_args( varargin )
   ech.RunTimeVal = @( v ) isscalar( v ) && ...
     isa( v , 'StateRuntimeVariable' ) ;
   ech.Reward = @( v ) isscalar( v ) && isnatnum( v ) ;
+  ech.Background = @( v ) eq( numel( v ) , 3 ) && ...
+    isnatnum( v , 0 , intmax( 'uint8' ) ) ;
   ech.StimProp = @( v ) iscell( v ) && ~mod( numel( v ) , 3 ) && ...
     all( cellfun( @( v ) isa( v , 'Stimulus' ) , v( 1 : 3 : end ) )  &  ...
          cellfun( @( v ) isrow( v ) && ischar( v ), v( 2 : 3 : end ) ) ) ;
@@ -84,6 +88,7 @@ function  ain = onEntry_args( varargin )
   ems.TimeZero = ems.State ;
   ems.RunTimeVal = 'StateRuntimeVariable' ;
   ems.Reward = 'natural number' ;
+  ems.Background = '3-element RGB row vector' ;
   ems.StimProp = 'cell array of sets with form Stimulus,Property,Value' ;
   
   % Append second row of empty double arrays
@@ -131,7 +136,8 @@ function  ain = onEntry_args( varargin )
   % Create an additional flag. Raise this if it is necessary to group
   % stimuli before drawing the next frame. This is the case when there is
   % more than one stimulus action + photodiode state change.
-  flg.grpstim = 1  <  ( flg.Stim + flg.Photodiode + flg.StimProp ) ;
+  flg.grpstim = 1  <  ...
+    ( flg.Stim + flg.Photodiode + flg.Background + flg.StimProp ) ;
   
   % Store flags in return struct
   ain.flg = flg ;
