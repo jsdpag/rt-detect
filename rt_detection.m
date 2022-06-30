@@ -18,6 +18,12 @@ cfg = retrieveConfig ;
 
 if  TrialData.currentTrial == 1
   
+  % Gain access to block selection function's global variable
+  global  ARCADE_BLOCK_SELECTION_GLOBAL ;
+  
+  % Store local pointer to table defining blocks of trials
+  P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
+  
   % Handle to session's behavioural store object
   P.bhv = SGLBehaviouralStore.launch ;
   
@@ -33,7 +39,7 @@ if  TrialData.currentTrial == 1
   [ P.evm , P.evh ] = rt_det_template_event_marker( P.nam ) ;
   
   % Make copy of trial error name to value mapping
-  P.err = gettrialerrors( true ) ;
+  P.err = ARCADE_BLOCK_SELECTION_GLOBAL.err ;
   
   % Open Win32 inter-process communication events
   for  E = { 'StartSacc' , 'EndSacc' , 'StartFix' , 'FalseAlarmFlag' , ...
