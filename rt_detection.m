@@ -7,7 +7,7 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-dbstop in rt_detection.m at 14
+% dbstop in rt_detection.m at 14
 %%% GLOBAL INITIALISATION %%%
 
 % Session's ARCADE config object
@@ -55,8 +55,8 @@ if  TrialData.currentTrial == 1
       cfg.MonitorDiagonalSize ) ;
   
   % Previous trial eye track window parameters
-  P.EyeTrack = struct( 'RfXDeg' , [] , 'RfYDeg' , [] , 'RfRadDeg' , [] ,...
-    'FixTolDeg' , [] ) ;
+  P.EyeTrack = struct( 'RfXDeg' , NaN , 'RfYDeg' , NaN , ...
+    'RfRadDeg' , NaN , 'RfWinFactor' , NaN , 'FixTolDeg' , NaN ) ;
   
   % Create fixation and target stimulus handles
   P.Target = Gaussian ;
@@ -94,9 +94,9 @@ end % first trial init
 %%% Trial variables %%%
 
 % Error check editable variables
-v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , BaselineMs , ...
-  WaitAvgMs , FixTolDeg , WaitMaxProb , RewardSlope , RewardMinMs , ...
-    RewardFailFrac , ScreenGamma , ItiMinMs ) ;
+v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
+  FixTolDeg , BaselineMs , WaitAvgMs , WaitMaxProb , RewardSlope , ...
+    RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs ) ;
   
 % Add type of block
 v.BlockType = ARCADE_BLOCK_SELECTION_GLOBAL.typ ;
@@ -127,8 +127,8 @@ rew = rewardsize( P.err.Correct , ...
   rew = max( RewardMinMs , ceil( rew ) ) ;
   
   % Store reward sizes
-  v.Reward.Correct = rew( 1 ) ;
-  v.Reward.Failed  = rew( 2 ) ;
+  v.Reward_Correct = rew( 1 ) ;
+  v.Reward_Failed  = rew( 2 ) ;
   
 % Add baseline period, this is now the duration of the Wait state.
 WaitMs = WaitMs  +  BaselineMs ;
@@ -143,15 +143,16 @@ StimServer.InvertGammaCorrection( ScreenGamma ) ;
 % trial, because editable variables were changed during task pause. Don't
 % reset and rebuild windows if unnecessary because trackeye wastes 500ms on
 % each reset (as of ARCADE v2.6).
-if  ~ all(  cellfun( @( f ) isequal( v.( f ) , P.EyeTrack.( f ) ) , ...
-    fieldnames( P.EyeTrack ) )  )
+if  ~ all(  cellfun( @( f ) v.( f ) == P.EyeTrack.( f ) , ...
+                                              fieldnames( P.EyeTrack ) )  )
 
   % Delete any existing eye window
   trackeye( 'reset' ) ;
 
   % Create fixation and target eye windows
-  trackeye(                     [ 0 , 0 ] , vpix.FixTolDeg , 'Fix'    ) ;
-  trackeye( [ vpix.RfXDeg , vpix.RfYDeg ] , vpix.RfRadDeg  , 'Target' ) ;
+  trackeye( [ 0 , 0 ] , vpix.FixTolDeg , 'Fix' ) ;
+  trackeye( [ vpix.RfXDeg , vpix.RfYDeg ] , vpix.RfRadDeg * RfWinFactor,...
+    'Target' ) ;
   
   % Remember new values
   for  F = fieldnames( P.EyeTrack )' , f = F{ 1 } ;
@@ -220,8 +221,8 @@ STATE_TABLE = ...
     'EyeTrackError' ,    0 , 'cleanUp'        , {} , {} , {} ; 
        'FalseAlarm' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
-           'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward.Failed  } ;
-          'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward.Correct } ;
+           'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward_Failed  } ;
+          'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward_Correct } ;
           'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'StimProp' , { P.Fix , 'visible' , false , P.Target , 'visible' , false } } ;
 } ;
 

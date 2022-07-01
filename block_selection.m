@@ -3,7 +3,7 @@ function  current_block = block_selection( currentTrial )
 % 
 % current_block = block_selection( currentTrial )
 % 
-dbstop in block_selection.m at 11
+% dbstop in block_selection.m at 68
   
   %%% Special variables %%%
   
@@ -56,12 +56,13 @@ dbstop in block_selection.m at 11
   t = getPreviousTrialData ;
   
   % Previous error, condition, and block type codes
-  e = t.trialError( end - 1 ) ;
-  c = t.conditions( end - 1 ) ;
-  b = t.blocks    ( end - 1 ) ;
+  e = t.trialError( end ) ;
+  c = t.conditions( end ) ;
+  b = t.blocks    ( end ) ;
   
-  % Sanity check, is previous block type the same as the current one?
-  if  P.typ ~= b , error( 'Block type mis-match' ) , end
+  % Sanity check, is previous block count the same as that on the previous
+  % trial?
+  if  P.blk ~= b , error( 'Block count mis-match' ) , end
   
   % Locate condition's index inside local counter struct
   i = P.cnt.condition == c ;
