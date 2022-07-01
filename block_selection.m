@@ -139,6 +139,9 @@ function  tab = gettab
 
   % Read in trial definitions
   tab = readtable( tabnam ) ;
+  
+  % Store table name in user data
+  tab.Properties.UserData = tabnam ;
 
   % Empty table
   if  isempty( tab )

@@ -24,6 +24,9 @@ if  TrialData.currentTrial == 1
   % Store local pointer to table defining blocks of trials
   P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
   
+    % Task-specific validity tests on block definition table
+    P.tab = tabvalchk( P.tab ) ;
+  
   % Handle to session's behavioural store object
   P.bhv = SGLBehaviouralStore.launch ;
   
@@ -48,28 +51,41 @@ if  TrialData.currentTrial == 1
     P.( name ) = IPCEvent( name ) ;
   end
   
+  % Get screen parameters
+  P.framerate = double( round( StimServer.GetFrameRate ) ) ;
+  P.screensize = double( StimServer.GetScreenSize ) ;
+  
   % Calculate pixels per degree of visual field. cm/deg * pix/cm = pix/deg.
   P.pixperdeg = ( cfg.DistanceToScreen * tand( 1 ) )  *  ...
-    ( sqrt( str2double( cfg.MonitorResolution.width  ) ^ 2  +  ...
-            str2double( cfg.MonitorResolution.height ) ^ 2 ) / ...
-      cfg.MonitorDiagonalSize ) ;
+    ( sqrt( sum( P.screensize .^ 2 ) ) / cfg.MonitorDiagonalSize ) ;
   
   % Previous trial eye track window parameters
   P.EyeTrack = struct( 'RfXDeg' , NaN , 'RfYDeg' , NaN , ...
     'RfRadDeg' , NaN , 'RfWinFactor' , NaN , 'FixTolDeg' , NaN ) ;
   
-  % Create fixation and target stimulus handles
-  P.Target = Gaussian ;
+  % Create flicker objects
+  P.Flicker.stim = Rectangle ;
+  P.Flicker.anim =   Flicker ;
   
-    P.Target.position = sqrt( 8 ^ 2 / 2 ) .* [ 1 , -1 ] * P.pixperdeg ;
-    P.Target.sdx = 1.5 * P.pixperdeg ;
-    P.Target.sdy = P.Target.sdx ;
-    P.Target.color( : ) = 255 ;
+    % Certain properties are fixed
+    P.Flicker.stim.faceColor( : ) = intmax( 'uint8' ) ;
+    P.Flicker.stim.width  = P.screensize( 1 ) ;
+    P.Flicker.stim.height = P.screensize( 2 ) ;
+  
+  % Create target stimulus objects, a bit of trickery required to create an
+  % empty Stimulus object for 'none'.
+  P.Target.gaussian = Gaussian ;
+  P.Target.none     = P.Target.gaussian( [ ] ) ;
     
+  % Create gaze fixation stimulus
   P.Fix = Rectangle ;
   
+    % Parameters are fixed
     P.Fix.position = [ 0 , 0 ] ;
     P.Fix.faceColor( : ) = 255 ;
+    P.Fix.lineColor( : ) = 0 ;
+    P.Fix.lineWidth = 1 ;
+    P.Fix.drawMode = 3 ;
     P.Fix.width = sqrt( pi * 0.075 ^ 2 ) * P.pixperdeg ;
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
@@ -164,9 +180,55 @@ end % update eye windows
 
 %%% Stimulus configuration %%%
 
-P.Target.position = [ vpix.RfXDeg , vpix.RfYDeg ] ;
-P.Target.sdx = vpix.RfRadDeg / 3 ;
-P.Target.sdy = P.Target.sdx ;
+% Get properties of current trial condition
+c = table2struct(  ...
+      P.tab( TrialData.currentCondition == P.tab.Condition , : )  ) ;
+
+% Determine screen background colour during Wait state
+switch  c.WaitBackground
+  case  'default' , WaitBak = { 'Background' ,   cfg.BackgroundRGB } ;
+  case    'black' , WaitBak = { 'Background' , [ 000 , 000 , 000 ] } ;
+  case      'red' , WaitBak = { 'Background' , [ 255 , 000 , 000 ] } ;
+  otherwise
+end
+
+% Background flicker
+if  c.BackgroundFlickerHz
+  
+  % Determine number of frames per cycle. Divided by 2. One half of frames
+  % ON, the other half, OFF.
+  n = P.framerate  /  c.BackgroundFlickerHz  /  2 ;
+  
+  % There is a fractional component, so round up to next whole frame
+  if  mod( n , 1 ) , n = ceil( n ) ; end
+  
+  % Set flicker animation object parameters
+  P.Flicker.anim.SetFrames( n , n ) ;
+  
+  % Bind animation to background rectangle
+  P.Flicker.stim.play_animation( P.Flicker.anim ) ;
+  
+  % Point to background rectangle
+  BackFlic = P.Flicker.stim ;
+  
+% No background flicker , point to empty stimulus
+else , BackFlic = P.Target.none ;
+end
+
+% Point to specified target
+Target = P.Target.( c.Target ) ;
+
+  % Configure target stimulus for upcoming trial, according to type
+  switch  c.Target
+    
+    case  'gaussian'
+      
+      Target.position = [ vpix.RfXDeg , vpix.RfYDeg ] ;
+      Target.sdx = vpix.RfRadDeg / 3 ;
+      Target.sdy = Target.sdx ;
+      Target.color( : ) = Weber( c.Contrast , WaitBak{ 2 } ) ;
+      
+  end % config targ stim
 
 
 %%% DEFINE TASK STATES %%%
@@ -203,8 +265,8 @@ MAXREP_GETFIX  = 100 ;
 STATE_TABLE = ...
 {           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'StimProp' , { P.Fix , 'faceColor' , [ 000 , 000 , 000 ] } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
           'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 255 , 255 , 255 ] } } ;
-             'Wait' ,WaitMs, 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' } ;
-         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { P.Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
+             'Wait' ,WaitMs, 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , [ { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' , 'Stim' , { BackFlic } } , WaitBak ] ;
+         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
    'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
           'Saccade' ,  125 , 'BrokenSaccade'  ,  { 'BlinkStart' , 'EndSacc' } , { 'Blink' , 'GetSaccadeTarget' } , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
  'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
@@ -223,7 +285,7 @@ STATE_TABLE = ...
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward_Failed  } ;
           'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward_Correct } ;
-          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'StimProp' , { P.Fix , 'visible' , false , P.Target , 'visible' , false } } ;
+          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'StimProp' , { P.Fix , 'visible' , false , Target , 'visible' , false , BackFlic , 'visible' , false } } ;
 } ;
 
 % Error check first trial, make sure that there is an event marker for
@@ -308,9 +370,11 @@ states = struct2cell( states ) ;
 createTrial( 'Start' , states{ : } )
 
 % Output to message log
-EchoServer.Write( '\n%s Start trial %d\n%9sWait %dms = %d + %d\n' , ...
-  datestr( now , 'HH:MM:SS' ) , TrialData.currentTrial , '' , ...
-    ceil( WaitMs ) , ceil( BaselineMs ) , ceil( v.WaitMs ) )
+EchoServer.Write( [ '\n%s Start trial %d, cond %d, block %d(%d)\n' , ...
+  '%9sWait %dms = %d + %d\n' ] , datestr( now , 'HH:MM:SS' ) , ...
+    TrialData.currentTrial , TrialData.currentCondition , ...
+      TrialData.currentBlock , v.BlockType , '' , ceil( WaitMs ) , ...
+        ceil( BaselineMs ) , ceil( v.WaitMs ) )
 
 
 %%% Complete previous trial's inter-trial-interval %%%
@@ -329,4 +393,102 @@ function  pout = persist( pin )
   if  nargout , pout = p ; end
   
 end % persist
+
+
+% Task-specific checks on the validity of 
+function  tab = tabvalchk( tab )
+  
+  % Required columns, the set of column headers
+  colnam = { 'ItiStimulus' , 'WaitBackground' , 'BackgroundFlickerHz' , ...
+    'Target' , 'Contrast' } ;
+  
+  % Numerical type check
+  fnumchk = @( c ) isnumeric( c ) && isreal( c ) && all( isfinite( c ) ) ;
+  
+  % Error checking for each column. Return true if column's type is valid.
+  valid.ItiStimulus = @iscellstr ;
+  valid.WaitBackground = @iscellstr ;
+  valid.BackgroundFlickerHz = fnumchk ;
+  valid.Target = @iscellstr ;
+  valid.Contrast = fnumchk ;
+  
+  % Support, what values are valid for each column?
+  sup.ItiStimulus = { 'none' } ;
+  sup.WaitBackground = { 'default' , 'red' , 'black' } ;
+  sup.BackgroundFlickerHz = [ 0 , round( StimServer.GetFrameRate ) / 2 ] ;
+  sup.Target = { 'none' , 'gaussian' } ;
+  sup.Contrast = [ -1 , +1 ] ;
+  
+  % Retrieve table's name
+  tabnam = tab.Properties.UserData ;
+  
+  % Check that all required columns are present
+  if  ~ all( ismember( colnam , tab.Properties.VariableNames ) )
+    
+    error( '%s must contain columns: %s' , ...
+      tabnam , strjoin( colnam , ' , ' ) )
+    
+  end % all columns found
+  
+  % Column names, point to values
+  for  C = colnam , c = C{ 1 } ; v = tab.( c ) ;
+    
+    % Format error string header
+    errstr = sprintf( 'Column %s of %s' , c , tabnam ) ;
+    
+    % Check if column has correct type
+    if  ~ valid.( c )( v )
+      
+      error( '%s has invalid type, violating %s' , ...
+        errstr , func2str( valid.( c ) ) )
+      
+    % Support is numeric
+    elseif  isnumeric( sup.( c ) )
+      
+      % Values are out of range
+      if  any( v < sup.( c )( 1 ) | v > sup.( c )( 2 ) )
+      
+        error( '%s outside range [%.1f,%.1f]' , errstr , sup.( c ) )
+        
+      end
+      
+    % Support is cell array of string
+    else
+      
+      % Get lower-case version of column's strings
+      str = lower( v ) ;
+      
+      % Assign these back into the table, returned in output argument
+      tab.( c ) = str ;
+      
+      % Are all of them in the support set?
+      if  ~ all( ismember( str , sup.( c ) ) )
+        
+        error( '%s outside set: %s', errstr, strjoin( sup.( c ) , ' , ' ) )
+        
+      end % all strings from support set
+    end % error check
+  end % cols
+end % tabvalchk
+
+
+% Convert Weber contrast value c to RGB I relative to background RGB Ib.
+% Reminder, Weber contrast = ( I - Ib ) / Ib where I is target luminance
+% and Ib is background luminance.
+function  I = Weber( c , Ib )
+
+  % Compute 'luminance', assuming greyscale background and target
+  I = Ib .* ( c + 1 ) ;
+  
+  % 'Hack' solution for training on black or red backgrounds. Scale zero-
+  % valued RGB components from 0 to 255 by c.
+  I( Ib == 0 ) = c * double( intmax( 'uint8' ) ) ;
+  
+  % Guarantee that we don't exceed numeric range
+  I = max( I , 0 ) ;
+  I = min( I , double( intmax( 'uint8' ) ) ) ;
+  
+end % Weber
+
+
 

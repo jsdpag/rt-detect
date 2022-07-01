@@ -124,6 +124,18 @@ function  ain = onEntry_args( varargin )
   % Stim/Prop/Val set
   ain.StimProp = reshape( ain.StimProp( : ) , 3 , [ ] ) ;
   
+  % Eliminate empty stimulus objects from Stim ...
+  if  ~ isempty( ain.Stim )
+    i = cellfun( @isempty , ain.Stim ) ;
+    ain.Stim( i ) = [ ] ;
+  end
+  
+  % ... and from StimProp
+  if  ~ isempty( ain.StimProp )
+    i = cellfun( @isempty , ain.StimProp( 1 , : ) ) ;
+    ain.StimProp( : , i ) = [ ] ;
+  end
+  
   % Stim, StimProp, Reset, & Trigger flags contain number of items
   flg.Stim     = numel( ain.Stim    ) ;
   flg.StimProp =  size( ain.StimProp , 2 ) ;
