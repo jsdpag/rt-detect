@@ -7,19 +7,19 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-% dbstop in rt_det_template.m at 14
+dbstop in rt_detection.m at 14
 %%% GLOBAL INITIALISATION %%%
 
 % Session's ARCADE config object
 cfg = retrieveConfig ;
 
+% Gain access to block selection function's global variable
+global  ARCADE_BLOCK_SELECTION_GLOBAL ;
+
 
 %%% FIRST TRIAL INITIALISATION -- PERSISTENT DATA %%%
 
 if  TrialData.currentTrial == 1
-  
-  % Gain access to block selection function's global variable
-  global  ARCADE_BLOCK_SELECTION_GLOBAL ;
   
   % Store local pointer to table defining blocks of trials
   P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
@@ -36,7 +36,7 @@ if  TrialData.currentTrial == 1
             'Failed' , 'Correct' , 'cleanUp' }' ;
   
   % Event marker codes for each state
-  [ P.evm , P.evh ] = rt_det_template_event_marker( P.nam ) ;
+  [ P.evm , P.evh ] = event_marker( P.nam ) ;
   
   % Make copy of trial error name to value mapping
   P.err = ARCADE_BLOCK_SELECTION_GLOBAL.err ;
@@ -97,6 +97,10 @@ end % first trial init
 v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , BaselineMs , ...
   WaitAvgMs , FixTolDeg , WaitMaxProb , RewardSlope , RewardMinMs , ...
     RewardFailFrac , ScreenGamma , ItiMinMs ) ;
+  
+% Add type of block
+v.BlockType = ARCADE_BLOCK_SELECTION_GLOBAL.typ ;
+
 
 % Convert variables with degrees into pixels, without destroying original
 % value in degrees
@@ -121,6 +125,10 @@ rew = rewardsize( P.err.Correct , ...
   
   % Round up to next millisecond and guarantee minimum reward size
   rew = max( RewardMinMs , ceil( rew ) ) ;
+  
+  % Store reward sizes
+  v.Reward.Correct = rew( 1 ) ;
+  v.Reward.Failed  = rew( 2 ) ;
   
 % Add baseline period, this is now the duration of the Wait state.
 WaitMs = WaitMs  +  BaselineMs ;
@@ -212,8 +220,8 @@ STATE_TABLE = ...
     'EyeTrackError' ,    0 , 'cleanUp'        , {} , {} , {} ; 
        'FalseAlarm' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
-           'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 2 ) } ;
-          'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , rew( 1 ) } ;
+           'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward.Failed  } ;
+          'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward.Correct } ;
           'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'StimProp' , { P.Fix , 'visible' , false , P.Target , 'visible' , false } } ;
 } ;
 
@@ -287,6 +295,12 @@ end % special onExit actions
 states.GetFix.maxRepetitions = MAXREP_GETFIX ;
 
 
+%%% Update script's persistent and user variables %%%
+
+persist( P )
+storeUserVariables( v )
+
+
 %%% CREATE TRIAL %%%
 
 states = struct2cell( states ) ;
@@ -296,12 +310,6 @@ createTrial( 'Start' , states{ : } )
 EchoServer.Write( '\n%s Start trial %d\n%9sWait %dms = %d + %d\n' , ...
   datestr( now , 'HH:MM:SS' ) , TrialData.currentTrial , '' , ...
     ceil( WaitMs ) , ceil( BaselineMs ) , ceil( v.WaitMs ) )
-
-
-%%% Update script's persistent and user variables %%%
-
-persist( P )
-storeUserVariables( v )
 
 
 %%% Complete previous trial's inter-trial-interval %%%

@@ -3,7 +3,7 @@ function  current_block = block_selection( currentTrial )
 % 
 % current_block = block_selection( currentTrial )
 % 
-  
+dbstop in block_selection.m at 11
   
   %%% Special variables %%%
   
@@ -23,7 +23,7 @@ function  current_block = block_selection( currentTrial )
     P.err = gettrialerrors( true ) ;
     
     % Import block definition table into Matlab, keep local copy
-    P.tab = gettab( tabnam ) ;
+    P.tab = gettab ;
     
     % Unique set of block type codes
     P.set = unique( P.tab.BlockType ) ;
@@ -34,12 +34,17 @@ function  current_block = block_selection( currentTrial )
     % Initialise trial counter for a new block of this type
     P.cnt = initcnt( P.typ , P.tab ) ;
     
+    % Initialise block counter
+    P.blk = 1 ;
+    
     % Share this info with condition selection and task script
     ARCADE_BLOCK_SELECTION_GLOBAL.tab = P.tab ;
     ARCADE_BLOCK_SELECTION_GLOBAL.err = P.err ;
+    ARCADE_BLOCK_SELECTION_GLOBAL.typ = P.typ ;
+    ARCADE_BLOCK_SELECTION_GLOBAL.condition = P.cnt.condition ;
     
-    % Can't run standard code because ARCADE trial data is empty
-    current_block = P.typ ;
+    % Can't go further because ARCADE trial data is empty on trial 1
+    current_block = P.blk ;
     return
     
   end % session init
@@ -89,13 +94,19 @@ function  current_block = block_selection( currentTrial )
     % Set of conditions
     c = P.cnt.condition ;
     
+    % Increment block counter
+    P.blk = P.blk + 1 ;
+    
+    % Tell condition selection and task script what type of block it is
+    ARCADE_BLOCK_SELECTION_GLOBAL.typ = P.typ ;
+    
   end % new block
   
   % Pack set of valid trial conditions for condition selection function
   ARCADE_BLOCK_SELECTION_GLOBAL.condition = c ;
   
   % Return current block type
-  current_block = P.typ ;
+  current_block = P.blk ;
   
 end % block_selection
 
