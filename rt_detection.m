@@ -76,6 +76,12 @@ if  TrialData.currentTrial == 1
   % empty Stimulus object for 'none'.
   P.Target.gaussian = Gaussian ;
   P.Target.none     = P.Target.gaussian( [ ] ) ;
+  
+  % Create fixation point mask, so that the point is stable during flicker
+  P.FixMask = Circle ;
+  
+    P.FixMask.faceColor( : ) = cfg.BackgroundRGB ;
+    P.FixMask.diameter = 0.5 * P.pixperdeg ;
     
   % Create gaze fixation stimulus
   P.Fix = Rectangle ;
@@ -89,6 +95,9 @@ if  TrialData.currentTrial == 1
     P.Fix.width = sqrt( pi * 0.075 ^ 2 ) * P.pixperdeg ;
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
+    
+    % Base mask values on fixation point
+    P.FixMask.position = P.Fix.position ;
   
   % Look for set of Mondrian mask files
   P.Mondrian.files = dir( 'C:\Toolbox\Mondrian\*png' ) ;
@@ -223,8 +232,11 @@ if  c.BackgroundFlickerHz
   % Point to background rectangle
   BackFlic = P.Flicker.stim ;
   
-% No background flicker , point to empty stimulus
-else , BackFlic = P.Target.none ;
+  % Enable fixation point mask
+  FixMask = P.FixMask ;
+  
+% No background flicker , point to empty stimulus and fix point mask
+else , BackFlic = P.Target.none ; FixMask = P.Target.none ;
 end
 
 % Point to specified target
@@ -233,6 +245,8 @@ Target = P.Target.( c.Target ) ;
   % Configure target stimulus for upcoming trial, according to type
   switch  c.Target
     
+    case  'none' % no action required
+      
     case  'gaussian'
       
       Target.position = [ vpix.RfXDeg , vpix.RfYDeg ] ;
@@ -303,7 +317,7 @@ MAXREP_GETFIX  = 100 ;
 STATE_TABLE = ...
 {           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'StimProp' , { P.Fix , 'faceColor' , [ 000 , 000 , 000 ] } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
           'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 255 , 255 , 255 ] } } ;
-             'Wait' ,WaitMs, 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , [ { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' , 'Stim' , { BackFlic } } , WaitBak ] ;
+             'Wait' ,WaitMs, 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , [ { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' , 'Stim' , { FixMask , BackFlic } } , WaitBak ] ;
          'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
    'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
           'Saccade' ,  125 , 'BrokenSaccade'  ,  { 'BlinkStart' , 'EndSacc' } , { 'Blink' , 'GetSaccadeTarget' } , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
@@ -323,7 +337,7 @@ STATE_TABLE = ...
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward_Failed  } ;
           'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward_Correct } ;
-          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'Stim' , { P.ItiStim.current } , 'StimProp' , { P.Fix , 'visible' , false , Target , 'visible' , false , BackFlic , 'visible' , false } } ;
+          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'Stim' , { P.ItiStim.current } , 'StimProp' , { P.Fix , 'visible' , false , Target , 'visible' , false , BackFlic , 'visible' , false , FixMask , 'visible' , false } } ;
 } ;
 
 % Error check first trial, make sure that there is an event marker for
@@ -419,8 +433,12 @@ EchoServer.Write( [ '\n%s Start trial %d, cond %d, block %d(%d)\n' , ...
 
 sleep( ItiMinMs  -  1e3 * toc( P.ITIstart.value ) )
 
-% Destroy any ITI stimulus
-if  ~ isempty( P.ItiStim.previous ) , delete( P.ItiStim.previous ) , end
+% Destroy any ITI stimulus and set previous to empty, in case the current
+% trial has no ITI stimulus
+if  ~ isempty( P.ItiStim.previous )
+  delete( P.ItiStim.previous )
+  P.ItiStim.previous = [ ] ;
+end
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%

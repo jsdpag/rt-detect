@@ -2,7 +2,7 @@
 %  Mod by Jackson Smith based on original by Martina Pandinelli
 
 % Create new images here
-destFolder = 'C:\user\Documents\MATLAB\mondrianMasks' ;
+destFolder = 'C:\Toolbox\Mondrian' ;
 
 % Screen parameters
 scrn.dist = 80.0 ; % subject distance eyes to screen centre, in cm
