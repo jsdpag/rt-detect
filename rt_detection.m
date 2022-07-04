@@ -90,6 +90,18 @@ if  TrialData.currentTrial == 1
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
   
+  % Look for set of Mondrian mask files
+  P.Mondrian.files = dir( 'C:\Toolbox\Mondrian\*png' ) ;
+  
+    % No files found
+    if  isempty( P.Mondrian.files )
+      error( 'No ITI Mondrian masks found in C:\Toolbox\Mondrian\*png' )
+    end
+    
+  % Initialise inter-trial-interval stimulus handle pointers
+  P.ItiStim.current  = [ ] ;
+  P.ItiStim.previous = [ ] ;
+  
   % Make reaction time start and end time variables, and tic time
   % measurement at end of previous trial for ITI measure
   P.RTstart  = StateRuntimeVariable ;
@@ -189,7 +201,7 @@ switch  c.WaitBackground
   case  'default' , WaitBak = { 'Background' ,   cfg.BackgroundRGB } ;
   case    'black' , WaitBak = { 'Background' , [ 000 , 000 , 000 ] } ;
   case      'red' , WaitBak = { 'Background' , [ 255 , 000 , 000 ] } ;
-  otherwise
+  otherwise , error( 'Unrecognised Wait background: %s', c.WaitBackground )
 end
 
 % Background flicker
@@ -228,7 +240,33 @@ Target = P.Target.( c.Target ) ;
       Target.sdy = Target.sdx ;
       Target.color( : ) = Weber( c.Contrast , WaitBak{ 2 } ) ;
       
+    otherwise , error( 'Unrecognised target stimulus: %s' , c.Target )
+      
   end % config targ stim
+  
+% Inter-trial stimulus' handle pointer swap. Previous trials's stimulus is
+% currently being presented, and will be destroyed at the end of the inter-
+% trial-interval that is now being executed.
+P.ItiStim.previous = P.ItiStim.current ;
+
+% Inter-trial stimulus to be presented at the end of the upcoming trial
+switch  c.ItiStimulus
+  
+  % Empty Stimulus object
+  case  'none' , P.ItiStim.current = P.Target.none ;
+    
+  % Randomly selected Mondrian mask
+  case  'mondrian'
+    
+    % Random draw
+    i = ceil( rand * numel( P.Mondrian.files ) ) ;
+    
+    % Create Picture object to display this file on screen
+    P.ItiStim.current = Picture( fullfile( P.Mondrian.files( i ).folder,...
+      P.Mondrian.files( i ).name ) ) ;
+    
+  otherwise , error( 'Unrecognised ITI stimulus: %s' , c.ItiStimulus )
+end
 
 
 %%% DEFINE TASK STATES %%%
@@ -285,7 +323,7 @@ STATE_TABLE = ...
            'Missed' ,    0 , 'cleanUp'        , {} , {} , {} ;
            'Failed' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward_Failed  } ;
           'Correct' ,    0 , 'cleanUp'        , {} , {} , { 'Reward' , v.Reward_Correct } ;
-          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'StimProp' , { P.Fix , 'visible' , false , Target , 'visible' , false , BackFlic , 'visible' , false } } ;
+          'cleanUp' ,    0 , 'final'          , {} , {} , { 'Photodiode' , 'off' , 'Background' , cfg.BackgroundRGB , 'Stim' , { P.ItiStim.current } , 'StimProp' , { P.Fix , 'visible' , false , Target , 'visible' , false , BackFlic , 'visible' , false } } ;
 } ;
 
 % Error check first trial, make sure that there is an event marker for
@@ -381,6 +419,9 @@ EchoServer.Write( [ '\n%s Start trial %d, cond %d, block %d(%d)\n' , ...
 
 sleep( ItiMinMs  -  1e3 * toc( P.ITIstart.value ) )
 
+% Destroy any ITI stimulus
+if  ~ isempty( P.ItiStim.previous ) , delete( P.ItiStim.previous ) , end
+
 
 %%% --- SCRIPT FUNCTIONS --- %%%
 
@@ -413,7 +454,7 @@ function  tab = tabvalchk( tab )
   valid.Contrast = fnumchk ;
   
   % Support, what values are valid for each column?
-  sup.ItiStimulus = { 'none' } ;
+  sup.ItiStimulus = { 'none' , 'mondrian' } ;
   sup.WaitBackground = { 'default' , 'red' , 'black' } ;
   sup.BackgroundFlickerHz = [ 0 , round( StimServer.GetFrameRate ) / 2 ] ;
   sup.Target = { 'none' , 'gaussian' } ;
