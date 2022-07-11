@@ -14,7 +14,7 @@ scrn.hpix = 1050 ; % Monitor height in pixels
 deg2pix = ( scrn.dist * tand( 1 ) ) * ...
           ( sqrt( scrn.wpix ^ 2 + scrn.hpix ^ 2 ) / scrn.diag ) ;
 nRect = 200000 ;
-nRep = 3 ; % Number of images I get in the end
+nRep = 997 ; % Number of images I get in the end
 
 % set monitor parameters
 monitorH = 1 : scrn.hpix ; % values in pixels
