@@ -2,7 +2,7 @@ BlockType,Condition,Trials,ItiStimulus,WaitBackground,BackgroundFlickerHz,Target
 1,1,10,none,default,0,gaussian,0.01
 1,2,10,mondrian,red,0,gaussian,-0.01
 1,3,10,mondrian,red,0,gaussian,0.01
-1,4,10,none,black,10,gaussian,0.01
-1,5,10,none,black,20,gaussian,0.5
-1,6,10,none,black,30,gaussian,0.5
+1,4,10,none,con0.05,10,gaussian,0.01
+1,5,10,none,con0.05,20,gaussian,0.5
+1,6,10,none,con0.05,30,gaussian,0.5
 1,7,10,none,black,60,gaussian,0.5

@@ -24,8 +24,11 @@ if  TrialData.currentTrial == 1
   % Store local pointer to table defining blocks of trials
   P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
   
+    % Contrast string regular expression
+    P.constrreg = '(?<=con)([01]?(\.\d+)?)' ;
+  
     % Task-specific validity tests on block definition table
-    P.tab = tabvalchk( P.tab ) ;
+    P.tab = tabvalchk( P.tab , P.constrreg ) ;
   
   % Handle to session's behavioural store object
   P.bhv = SGLBehaviouralStore.launch ;
@@ -68,7 +71,7 @@ if  TrialData.currentTrial == 1
   P.Flicker.anim =   Flicker ;
   
     % Certain properties are fixed
-    P.Flicker.stim.faceColor( : ) = intmax( 'uint8' ) ;
+    P.Flicker.stim.faceColor( : ) = double( intmax( 'uint8' ) ) ;
     P.Flicker.stim.width  = P.screensize( 1 ) ;
     P.Flicker.stim.height = P.screensize( 2 ) ;
   
@@ -205,13 +208,40 @@ end % update eye windows
 c = table2struct(  ...
       P.tab( TrialData.currentCondition == P.tab.Condition , : )  ) ;
 
+% Reset flicker colour
+P.Flicker.stim.faceColor( : ) = double( intmax( 'uint8' ) ) ;
+
 % Determine screen background colour during Wait state
 switch  c.WaitBackground
   case  'default' , WaitBak = { 'Background' ,   cfg.BackgroundRGB } ;
   case    'black' , WaitBak = { 'Background' , [ 000 , 000 , 000 ] } ;
   case      'red' , WaitBak = { 'Background' , [ 255 , 000 , 000 ] } ;
-  otherwise , error( 'Unrecognised Wait background: %s', c.WaitBackground )
-end
+  otherwise
+    
+    % Attempt to read background contrast
+    bakcon = regexp( c.WaitBackground , P.constrreg , 'tokens' , 'once' ) ;
+    
+    % Check for contrast
+    if  ~ isempty( bakcon )
+      
+      % regexp returns { <string> }, convert string to numeric
+      bakcon = str2double( bakcon{ 1 } ) ;
+      
+      % Convert from Michelson contrast into pixel delta
+      bakcon = bakcon .* cfg.BackgroundRGB ;
+      
+      % Set background ...
+      WaitBak = { 'Background' , max( 0 , cfg.BackgroundRGB - bakcon ) } ;
+      
+      % ... and flicker colours
+      P.Flicker.stim.faceColor( : ) = ...
+        min( double( intmax( 'uint8' ) ) , cfg.BackgroundRGB + bakcon ) ;
+    
+    % No recognisable contrast or valid background colour provided
+    else , error( 'Unrecognised Wait background: %s', c.WaitBackground )
+    end
+    
+end % background colour
 
 % Background flicker
 if  c.BackgroundFlickerHz
@@ -454,8 +484,8 @@ function  pout = persist( pin )
 end % persist
 
 
-% Task-specific checks on the validity of 
-function  tab = tabvalchk( tab )
+% Task-specific checks on the validity of trial_condition_table.csv
+function  tab = tabvalchk( tab , cstrreg )
   
   % Required columns, the set of column headers
   colnam = { 'ItiStimulus' , 'WaitBackground' , 'BackgroundFlickerHz' , ...
@@ -463,6 +493,22 @@ function  tab = tabvalchk( tab )
   
   % Numerical type check
   fnumchk = @( c ) isnumeric( c ) && isreal( c ) && all( isfinite( c ) ) ;
+  
+  % Numeric support check
+  fnumsup = @( val , sup ) val >= sup( 1 ) | val <= sup( 2 ) ;
+  
+  % String support check
+  fstrsup = @( str , sup ) ismember( str , sup ) ;
+  
+  % Support error strings, for numbers and cell/string arrays
+  fnumerr = @( sup ) sprintf( '[%.1f,%.1f]' , sup ) ;
+  fstrerr = @( sup ) [ '{''' , strjoin( sup , ''',''' ) , '''}' ] ;
+  
+  % Contrast string support, allow values between 0 and 1, where contrast
+  % strings are provided.
+  fconsup = @( c ) fnumsup( str2double( cellfun( @( c ) [ c{ : } ] , ...
+    regexp( c , cstrreg , 'tokens' , 'once' ) , ...
+      'UniformOutput' , false ) ) , [ 0 , 1 ] ) ;
   
   % Error checking for each column. Return true if column's type is valid.
   valid.ItiStimulus = @iscellstr ;
@@ -477,6 +523,21 @@ function  tab = tabvalchk( tab )
   sup.BackgroundFlickerHz = [ 0 , round( StimServer.GetFrameRate ) / 2 ] ;
   sup.Target = { 'none' , 'gaussian' } ;
   sup.Contrast = [ -1 , +1 ] ;
+  
+  % Support check function
+  supchk.ItiStimulus = fstrsup ;
+  supchk.WaitBackground = ...
+    @( str , sup ) fstrsup( str , sup ) | fconsup( str ) ;
+  supchk.BackgroundFlickerHz = fnumsup ;
+  supchk.Target = fstrsup ;
+  supchk.Contrast = fnumsup ;
+  
+  % Define support error message
+  superr.ItiStimulus = fstrerr( sup.ItiStimulus ) ;
+  superr.WaitBackground = fstrerr( [ sup.ItiStimulus , { cstrreg } ] ) ;
+  superr.BackgroundFlickerHz = fnumerr( sup.BackgroundFlickerHz ) ;
+  superr.Target = fstrerr( sup.Target ) ;
+  superr.Contrast = fnumerr( sup.Contrast ) ;
   
   % Retrieve table's name
   tabnam = tab.Properties.UserData ;
@@ -501,32 +562,24 @@ function  tab = tabvalchk( tab )
       error( '%s has invalid type, violating %s' , ...
         errstr , func2str( valid.( c ) ) )
       
-    % Support is numeric
-    elseif  isnumeric( sup.( c ) )
-      
-      % Values are out of range
-      if  any( v < sup.( c )( 1 ) | v > sup.( c )( 2 ) )
-      
-        error( '%s outside range [%.1f,%.1f]' , errstr , sup.( c ) )
-        
-      end
-      
     % Support is cell array of string
-    else
+    elseif  iscellstr( sup.( c ) )
       
       % Get lower-case version of column's strings
-      str = lower( v ) ;
+      v = lower( v ) ;
       
       % Assign these back into the table, returned in output argument
-      tab.( c ) = str ;
+      tab.( c ) = v ;
       
-      % Are all of them in the support set?
-      if  ~ all( ismember( str , sup.( c ) ) )
-        
-        error( '%s outside set: %s', errstr, strjoin( sup.( c ) , ' , ' ) )
-        
-      end % all strings from support set
     end % error check
+    
+    % Values are out of range
+    if  ~ all( supchk.( c )( v , sup.( c ) ) )
+
+      error( '%s not in set %s' , errstr , superr.( c ) )
+
+    end % range check
+    
   end % cols
 end % tabvalchk
 
