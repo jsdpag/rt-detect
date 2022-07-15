@@ -123,10 +123,17 @@ if  TrialData.currentTrial == 1
     % Initialise P.ITIstart to zero, so that we don't wait on first trial
     P.ITIstart.value = zeros( 1 , 'uint64' ) ;
   
-% Retrieve persistent data
+  % Create and initialise behaviour plots
+  P.ofig = creatbehavfig( P.tab ) ;
+  
+% All subsequent trials
 else
   
+  % Retrieve persistent data
   P = persist ;
+  
+  % Update behaviour plots based on previous trial
+  %< HERE >
   
 end % first trial init
 
