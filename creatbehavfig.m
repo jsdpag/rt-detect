@@ -28,6 +28,10 @@ function  ofig = creatbehavfig( cfg , err , tab )
   blk.x = arrayfun( @( t ) unique( tab.Contrast( tab.BlockType == t ) ),...
     blk.typ , 'UniformOutput' , false ) ;
   
+  % Create name for each block
+  blk.nam = arrayfun( @( t ) sprintf( 'Block %d' , t ) , blk.typ , ...
+    'UniformOutput' , false ) ;
+  
   % Global minimum and maximum contrast value
   blk.min = min( [ blk.x{ : } ] ) ;
   blk.max = max( [ blk.x{ : } ] ) ;
@@ -95,9 +99,6 @@ function  ofig = creatbehavfig( cfg , err , tab )
   % Find its handle
   ax = findobj( fh , 'Tag' , 'Raster' ) ;
   
-  % Set as current axes
-  axes( ax ) ;
-  
   % Create group data struct
   
     % Number of trials to track in raster
@@ -118,10 +119,10 @@ function  ofig = creatbehavfig( cfg , err , tab )
     dat.cnt.Trials = 0 ; % Only correct, failed, and false alarm
   
   % Axis limits
-  axis( [ 0.5 , dat.N + 0.5 , -0.25 , 3.25 ] )
+  axis( ax , [ 0.5 , dat.N + 0.5 , -0.25 , 3.25 ] )
   
   % Don't show the axes object, itself
-  axis  off
+  axis( ax , 'off' )
   
   % Initialise axes title, show string as is without any Tex interpretation
   set( ax.Title , 'String' , dat.nam , 'Interpreter' , 'none' , ...
@@ -138,8 +139,8 @@ function  ofig = creatbehavfig( cfg , err , tab )
   y = 4 ;
   for  F = { 'corr' , 'fail' , 'false' , 'other' } , f = F{ 1 }; y = y - 1;
     
-    text( -0.01 * dat.N , y , f , 'HorizontalAlignment' , 'right' , ...
-       'FontName' , 'Arial' )
+    text( ax , -0.01 * dat.N , y , f , 'HorizontalAlignment' , 'right' ,...
+       'FontName' , 'Arial' , 'FontSize' , 9 )
     
   end % raster labels
   
@@ -149,26 +150,25 @@ function  ofig = creatbehavfig( cfg , err , tab )
   
   % Create rasters
   h = [ ...
-plot( x, y + 3, '.', 'MarkerEdgeColor', col.green , 'Tag' , 'Corr'  ) ;
-plot( x, y + 2, '.', 'MarkerEdgeColor', col.blue  , 'Tag' , 'Fail'  ) ;
-plot( x, y + 1, '.', 'MarkerEdgeColor', col.yellow, 'Tag' , 'False' ) ;
-plot( x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' ) ]' ;
+plot( ax, x, y + 3, '.', 'MarkerEdgeColor', col.green , 'Tag' , 'Corr'  ) ;
+plot( ax, x, y + 2, '.', 'MarkerEdgeColor', col.blue  , 'Tag' , 'Fail'  ) ;
+plot( ax, x, y + 1, '.', 'MarkerEdgeColor', col.yellow, 'Tag' , 'False' ) ;
+plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
   
   % Add graphics object group to onlinefigure
-  ofig.addgroup( 'BehavRaster', '', dat, [ ax , h ], @fupdate_behavraster )
+  ofig.addgroup( 'BehavRaster', '', dat, [ ax , h'], @fupdate_behavraster )
   
   
   %-- Trial information --%
   
-  % Find axes and set current
+  % Find axes
   ax = findobj( fh , 'Tag' , 'Info' ) ;
-  axes( ax ) ;
   
   % Lock axes limits
-  axis( [ 0 , 1 , 0 , 1 ] )
+  axis( ax , [ 0 , 1 , 0 , 1 ] )
   
   % Hide axes
-  axis  off
+  axis( ax , 'off' )
   
   % Alter err into a struct with cell array of error names in .nam and
   % error codes in .val. Fields are in register so that finding error in
@@ -176,10 +176,59 @@ plot( x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' ) ]' ;
   dat = struct( 'nam', { fieldnames( err ) }, 'val', struct2array( err ) );
   
   % Add text object to report trial info
-  h = text( 0 , 0.5 , '' , 'FontName' , 'Arial' ) ;
+  h = text( ax , 0 , 0.5 , '' , 'FontName' , 'Arial' ) ;
   
   % Add group
   ofig.addgroup( 'TrialInfo' , '' , dat , h , @fupdate_trialinfo )
+  
+  
+  %-- Reaction time histogram --%
+  
+  % Find axes
+  ax = findobj( fh , 'Tag' , 'RT Histogram' ) ;
+  
+  % Lock x-axis limits, in milliseconds
+  xlim( ax , [ 0 , 500 ] )
+  
+  % Labels
+  xlabel( ax , 'Reaction time (ms)' )
+  ylabel( ax , 'Trials' )
+  
+  % Centre of RT bins
+  x = 5 : 10 : 495 ;
+  
+  % Initialise bar height
+  y = zeros( size( x ) ) ;
+  
+  % Selection display parameters for bar and text objects
+  selpar = { { 'EdgeColor', 'k', 'FaceColor', col.blue, 'BarWidth', 1 } ;
+             { 'Visible', 'on' } } ;
+  unspar = { { 'EdgeColor', 'none', 'FaceColor', [ 0.6 , 0.6 , 0.6 ], ...
+    'BarWidth', 0.9 } ; { 'Visible', 'off' } } ;
+  
+  % Collect information about bin number and width. Also, get trial error
+  % code for correct trial outcome. Also, maintain a total RT sum and trial
+  % count.
+  dat = struct( 'N', numel( x ), 'width', 10, 'Correct', err.Correct, ...
+    'RTsum', 0, 'trials', 0 ) ;
+  
+  % Blocks of trials. Get group and set identifiers (id & nam).
+  for  i = 1 : blk.N , nam = blk.nam{ i } ; id = [ nam , ' RT' ] ;
+    
+    % Create bar object to draw the histogram and text object to report the
+    % mean RT
+    h = [  bar( ax , x , y , 1 , selpar{ 1 }{ : } , 'Tag' , 'data' ) , ...
+          text( ax, 1, 1, '', 'Units', 'normalized', 'Tag', 'avg', ...
+            'HorizontalAlignment', 'right', 'VerticalAlignment', 'top' ) ];
+    
+    % Create new graphics objects group.
+    ofig.addgroup( id , nam , dat , h , @fupdate_rthist )
+    
+    % Bind selection and un-selection parameters
+    ofig.bindparam( id , 'seldata'   , selpar{ : } )
+    ofig.bindparam( id , 'unseldata' , unspar{ : } )
+    
+  end % blocks of trials
   
   
   %%% Done %%%
@@ -284,10 +333,15 @@ end % fupdate_behavraster
 %   .blk - Block indices
 %   .typ - Block types
 %   .rt  - Reaction times
+%
+% There is one additional set of fields. These are scalar values:
+%   .trials - Number of correct/failed trials collected in the current
+%      block.
+%   .total - Total number of trials required by block.
 function  data = fupdate_trialinfo( hdata , data , ~ , newdata )
   
   % Accumulate info string
-  str = cell( 1 , 2 ) ;
+  str = cell( 1 , 3 ) ;
   
   % Init prev/next index
   i = 0 ;
@@ -318,17 +372,52 @@ function  data = fupdate_trialinfo( hdata , data , ~ , newdata )
       C{ 4 } = sprintf( '\n  Result: %s\n' , data.nam{ e } ) ;
       
       % Reaction time
-      C{ 5 } = sprintf( '  RT: %dms\n\n' , ceil( newdata.rt( i ) ) ) ;
+      C{ 5 } = sprintf( '  RT: %dms' , ceil( newdata.rt( i ) ) ) ;
       
     end % prev trial
     
     % Concatenate and accumulate
-    str{ i } = [ C{ : } ] ;
+    str{ i } = [ C{ : } , ...
+      sprintf( '\\fontsize{2}\n\\fontsize{%d}\n' , hdata.FontSize ) ] ;
     
   end % prev / next trial
+  
+  % Block's trial count
+  str{ end } = sprintf( 'Trials/Total: %d/%d (%.1f%%)', ...
+    newdata.trials, newdata.total, newdata.trials / newdata.total * 100 ) ;
   
   % Show string after final concatenation
   hdata.String = [ str{ : } ] ;
   
 end % fupdate_trialinfo
+
+
+% Block-wide reaction time histogram. newdata is the trial error code of
+% previous trial. index is the reaction time of previous trial.
+function  data = fupdate_rthist( hdata , data , index , newdata )
+  
+  % Check if previous trial was correct. If not, return immediately because
+  % there is no valid reaction time.
+  if  data.Correct ~= newdata , return , end
+  
+  % Find the bar
+  hbar = findobj( hdata , 'Tag' , 'data' ) ;
+  
+  % Compute index of bin that tallies new reaction time
+  i = min( ceil( index / data.width ) , data.N ) ;
+  
+  % Count one more trial
+  hbar.YData( i ) = hbar.YData( i ) + 1 ;
+  
+  % Accumulate sum
+  data.RTsum  = data.RTsum  + index ;
+  data.trials = data.trials + 1     ;
+  
+  % Find average RT text object
+  htext = findobj( hdata , 'Tag' , 'avg' ) ;
+  
+  % Format string with latest average RT
+  htext.String = sprintf( '%dms\navg', round( data.RTsum / data.trials ) );
+  
+end % fupdate_rthist
 

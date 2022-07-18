@@ -42,6 +42,8 @@ function  current_block = block_selection( currentTrial )
     ARCADE_BLOCK_SELECTION_GLOBAL.err = P.err ;
     ARCADE_BLOCK_SELECTION_GLOBAL.typ = P.typ ;
     ARCADE_BLOCK_SELECTION_GLOBAL.condition = P.cnt.condition ;
+    ARCADE_BLOCK_SELECTION_GLOBAL.count = ...
+      struct( 'trials' , 0 , 'total' , sum( P.cnt.trials ) ) ;
     
     % Can't go further because ARCADE trial data is empty on trial 1
     current_block = P.blk ;
@@ -101,10 +103,16 @@ function  current_block = block_selection( currentTrial )
     % Tell condition selection and task script what type of block it is
     ARCADE_BLOCK_SELECTION_GLOBAL.typ = P.typ ;
     
+    % Total number of trials required by this block
+    ARCADE_BLOCK_SELECTION_GLOBAL.count.total = sum( P.cnt.trials ) ;
+    
   end % new block
   
   % Pack set of valid trial conditions for condition selection function
   ARCADE_BLOCK_SELECTION_GLOBAL.condition = c ;
+  
+  % Tally number of completed trials in this block
+  ARCADE_BLOCK_SELECTION_GLOBAL.count.trials = sum( P.cnt.counter ) ;
   
   % Return current block type
   current_block = P.blk ;
