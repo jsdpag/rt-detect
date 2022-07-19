@@ -25,8 +25,9 @@ function  ofig = creatbehavfig( cfg , err , tab )
   % Find corresponding sets of target contrasts. This will be the
   % independent variable in the psychometric and RT plots. Return as cell
   % array of vectors.
-  blk.x = arrayfun( @( t ) unique( tab.Contrast( tab.BlockType == t ) ),...
-    blk.typ , 'UniformOutput' , false ) ;
+  blk.x = ...
+    arrayfun( @( t ) unique( tab.Contrast( tab.BlockType == t ) )' , ...
+      blk.typ , 'UniformOutput' , false ) ;
   
   % Create name for each block
   blk.nam = arrayfun( @( t ) sprintf( 'Block %d' , t ) , blk.typ , ...
@@ -65,16 +66,16 @@ function  ofig = creatbehavfig( cfg , err , tab )
   %%% Create axes %%%
   
   % Outcome raster plot
-  ofig.subplot( 6 , 3 , [  1 ,  2 ] , 'Tag' , 'Raster'        ) ;
+  ofig.subplot( 6 , 3 , [  1 ,  5 ] , 'Tag' , 'Raster'        ) ;
   
   % Current/previous trial info
   ofig.subplot( 6 , 3 , [  3 ,  9 ] , 'Tag' , 'Info'          ) ;
   
   % Psychometric curves
-  ofig.subplot( 6 , 3 , [  4 , 16 ] , 'Tag' , 'Psychometric'  ) ;
+  ofig.subplot( 6 , 3 , [  7 , 16 ] , 'Tag' , 'Psychometric'  ) ;
   
   % Reaction time curves
-  ofig.subplot( 6 , 3 , [  5 , 17 ] , 'Tag' , 'Reaction Time' ) ;
+  ofig.subplot( 6 , 3 , [  8 , 17 ] , 'Tag' , 'Reaction Time' ) ;
   
   % Grand reaction time histogram
   ofig.subplot( 6 , 3 , [ 12 , 18 ] , 'Tag' , 'RT Histogram'  ) ;
@@ -89,7 +90,8 @@ function  ofig = creatbehavfig( cfg , err , tab )
   col = struct( 'green' , col( 5 , : ) , ...
                  'blue' , col( 1 , : ) , ...
                'yellow' , col( 3 , : ) , ...
-                 'plum' , col( 4 , : ) ) ;
+                 'plum' , col( 4 , : ) , ...
+                'lgrey' , [ 0.6 , 0.6 , 0.6 ] ) ;
   
   
   %%% Populate each axis with appropriate graphics objects %%%
@@ -119,7 +121,7 @@ function  ofig = creatbehavfig( cfg , err , tab )
     dat.cnt.Trials = 0 ; % Only correct, failed, and false alarm
   
   % Axis limits
-  axis( ax , [ 0.5 , dat.N + 0.5 , -0.25 , 3.25 ] )
+  axis( ax , [ 0.5 , dat.N + 0.5 , -0.5 , 4.0 ] )
   
   % Don't show the axes object, itself
   axis( ax , 'off' )
@@ -140,7 +142,7 @@ function  ofig = creatbehavfig( cfg , err , tab )
   for  F = { 'corr' , 'fail' , 'false' , 'other' } , f = F{ 1 }; y = y - 1;
     
     text( ax , -0.01 * dat.N , y , f , 'HorizontalAlignment' , 'right' ,...
-       'FontName' , 'Arial' , 'FontSize' , 9 )
+       'FontName' , 'Arial' , 'FontSize' , 10 )
     
   end % raster labels
   
@@ -176,10 +178,131 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
   dat = struct( 'nam', { fieldnames( err ) }, 'val', struct2array( err ) );
   
   % Add text object to report trial info
-  h = text( ax , 0 , 0.5 , '' , 'FontName' , 'Arial' ) ;
+  h = text( ax , 0 , 1 , '' , 'FontName' , 'Arial' , ...
+    'VerticalAlignment' , 'top' ) ;
   
   % Add group
   ofig.addgroup( 'TrialInfo' , '' , dat , h , @fupdate_trialinfo )
+  
+  
+  %-- Psychometric and reaction time curves --%
+  
+  % Data specific parameters
+  
+    % Axes tags
+    TAGS = { 'Psychometric' , 'Reaction Time' } ;
+    
+    % Y-axis limits
+    YLIM = { [ 0 , 100 ] , [ ] } ;
+  
+    % X- and Y-Axis labels
+    XLAB = { 'Target contrast' , [ ] } ;
+    YLAB = { 'Correct trials (%)' , 'Reaction time (ms)' } ;
+    
+    % Function handles
+    FUPDATE = { @fupdate_psych , @fupdate_rt } ;
+       FFIT = {    @ffit_psych ,    @ffit_rt } ;
+    
+  % Collect relevant trial error codes for group data
+  dat.Correct = err.Correct ;
+  dat.Failed  = err.Failed  ;
+  
+  % Selection and un-selection parameters for the error bars and scatter
+  % objects that show the empirical data.
+  selpar = { ...
+    { 'Color' , col.blue / 2 , 'LineWidth' , 1 } ;
+    { 'MarkerEdgeColor' , col.blue / 2 , 'MarkerFaceColor' , col.blue , ...
+      'LineWidth' , 1 } } ;
+  unspar = { ...
+    { 'Color' , col.lgrey , 'LineWidth' , 0.5 } ;
+    { 'MarkerEdgeColor' , col.lgrey , 'MarkerFaceColor' , col.lgrey , ...
+      'LineWidth' , 0.5 } } ;
+  
+  % Selection and un-selection parameters for the parameter lines, labels,
+  % and best-fit curve. Note, there are two parameter lines and labels.
+  selparfit = [ repmat( { { 'Visible' ,  'on' } } , 4 , 1 ) ; 
+    { { 'Color' , col.blue  , 'LineWidth' , 1.0 } } ] ;
+  unsparfit = [ repmat( { { 'Visible' , 'off' } } , 4 , 1 ) ; 
+    { { 'Color' , col.lgrey , 'LineWidth' , 0.5 } } ] ;
+  
+  % Best fit curve sample points
+  xfit = blk.lim( 1 ) : blk.rng / 1e3 : blk.lim( 2 ) ;
+  yfit = nan( size( xfit ) ) ;
+  
+  % Data types
+  for  dattyp = 1 : numel( TAGS )
+
+    % Find axes
+    ax = findobj( fh , 'Tag' , TAGS{ dattyp } ) ;
+
+    % Format the axis
+    axis( ax , 'square' )
+    xlim( ax , blk.lim )
+    if  ~ isempty( YLIM{ dattyp } ) , ylim( ax , YLIM{ dattyp } ) , end
+
+    % Labels
+    if  ~ isempty( XLAB{ dattyp } ) , xlabel( ax , XLAB{ dattyp } ) , end
+    ylabel( ax , YLAB{ dattyp } )
+
+    % Blocks of trials
+    for  i = 1 : blk.N
+      
+      % Get group and set identifier strings (id & nam)
+      nam = blk.nam{ i } ;
+      id = [ TAGS{ dattyp } , ' ' , nam ] ;
+
+      % The set of independent variable test values, and NaN vector with the
+      % same size
+      x = blk.x{ i } ;
+      y = nan( size( x ) ) ;
+
+      % Data will be a Welford array, for accumulating an estimate of
+      % variance
+      dat.w = Welford( size( x ) ) ;
+
+      % Create empirical data graphics objects
+      h = [ errorbar( ax , x , y , y , 'LineStyle' , 'none' , ...
+              'Marker' , 'none' , 'Tag' , 'error' ) , ...
+            scatter( ax , x , y , 'Tag' , 'data' ) ] ;
+
+      % Add graphics object group and bind parameters
+      ofig.addgroup ( id , nam , dat , h , FUPDATE{ dattyp } )
+      ofig.bindparam( id ,   'seldata' , selpar{ : } )
+      ofig.bindparam( id , 'unseldata' , unspar{ : } )
+
+      % Make curve fitting graphics objects
+      h = [ plot( ax , nan( 2 , 2 ) , nan( 2 , 2 ) , 'k--' ) ; 
+            text( ax , nan( 1 , 2 ) , nan( 1 , 2 ) , { '' , '' } , ...
+              'FontName' , 'Arial' , 'VerticalAlignment' , 'bottom' ) ]' ;
+
+      % Tag them
+      h( 1 ).Tag = 'xthreshold' ;  h( 3 ).Tag = 'xthlabel' ;
+      h( 2 ).Tag = 'ythreshold' ;  h( 4 ).Tag = 'ythlabel' ;
+
+      % Create fitted function line
+      h = [ h , plot( ax , xfit , yfit , 'Tag' , 'curve' ) ] ;
+
+      % Bind fitted function to data, and selection params to fit objects
+      ofig.bindfit( id , h , FFIT{ dattyp } )
+      ofig.bindparam( id ,   'selfit' , selparfit{ : } )
+      ofig.bindparam( id , 'unselfit' , unsparfit{ : } )
+
+    end % blocks
+  end % data types
+  
+  % Find both axes
+  ax = [ findobj( fh , 'Tag' , TAGS{ 1 } ) ;
+         findobj( fh , 'Tag' , TAGS{ 2 } ) ] ;
+       
+  % Set units to pixels
+  set( [ ax ; ax( 1 ).XLabel ] , 'Units' , 'pixels' )
+  
+  % Position x-axis label between the two axes
+  ax( 1 ).XLabel.Position( 1 ) = ( ax( 2 ).Position( 1 ) - ...
+    sum( ax( 1 ).Position( [ 1 , 3 ] ) ) ) / 2  +  ax( 1 ).Position( 3 ) ;
+  
+  % Reset unit type
+  set( ax , 'Units' , 'normalized' )
   
   
   %-- Reaction time histogram --%
@@ -187,6 +310,10 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
   % Find axes
   ax = findobj( fh , 'Tag' , 'RT Histogram' ) ;
   
+  % Make it a tad shorter
+  ax.Position( [ 2 , 4 ] ) = [ +1/3 , -1/3 ] * ax.Position( 4 )  +  ...
+    ax.Position( [ 2 , 4 ] ) ;
+
   % Lock x-axis limits, in milliseconds
   xlim( ax , [ 0 , 500 ] )
   
@@ -203,7 +330,7 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
   % Selection display parameters for bar and text objects
   selpar = { { 'EdgeColor', 'k', 'FaceColor', col.blue, 'BarWidth', 1 } ;
              { 'Visible', 'on' } } ;
-  unspar = { { 'EdgeColor', 'none', 'FaceColor', [ 0.6 , 0.6 , 0.6 ], ...
+  unspar = { { 'EdgeColor', 'none', 'FaceColor', col.lgrey, ...
     'BarWidth', 0.9 } ; { 'Visible', 'off' } } ;
   
   % Collect information about bin number and width. Also, get trial error
@@ -213,7 +340,7 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
     'RTsum', 0, 'trials', 0 ) ;
   
   % Blocks of trials. Get group and set identifiers (id & nam).
-  for  i = 1 : blk.N , nam = blk.nam{ i } ; id = [ nam , ' RT' ] ;
+  for  i = 1 : blk.N , nam = blk.nam{ i } ; id = [ 'RT ' , nam ] ;
     
     % Create bar object to draw the histogram and text object to report the
     % mean RT
@@ -233,7 +360,12 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
   
   %%% Done %%%
   
+  % Apply formatting through selection of first block, by default
+  ofig.select( 'set' , blk.nam{ 1 } )
+  
+  % Show thine creation
   fh.Visible = 'on' ;
+  
   
 end % creatbehavfig
 
@@ -390,6 +522,206 @@ function  data = fupdate_trialinfo( hdata , data , ~ , newdata )
   hdata.String = [ str{ : } ] ;
   
 end % fupdate_trialinfo
+
+
+% Updates the psychometric curves. index must be a struct. index.x is the
+% target contrast of the previous trial. index.err is the trial error code
+% of the previous trial. newdata input arg not used.
+function  data = fupdate_psych( hdata , data , index , ~ )
+  
+  % Previous trial not correct or failed, return now
+  if  index.err ~= data.Correct && index.err ~= data.Failed , return , end
+  
+  % newdata is 0 for failed and 1 for correct
+  newdata = index.err == data.Correct ;
+  
+  % Call generic function with additional scaling arguments
+  data = fupdate_targcon( hdata, data, index, newdata, 100, 'binpci' ) ;
+  
+end % fupdate_psych
+
+
+% Updates the reaction time vs target contrast curves. Same form as
+% fupdate_psych, except that newdata contains previous trial reaction time.
+function  data = fupdate_rt( hdata , data , index , newdata )
+  
+  % Trial is not correct, return now
+  if  index.err ~= data.Correct , return , end
+  
+  % Call generic function with additional scaling arguments
+  data = fupdate_targcon( hdata , data , index , newdata , 1 , 'sem' ) ;
+  
+  % Parent axes
+  ax = hdata( 1 ).Parent ;
+  
+  % Find all data objects in parent axes
+  h = findobj( ax , 'Tag' , 'data' ) ;
+  
+  % Return all y-axis values
+  y = get( h , 'YData' ) ;
+  
+  % Concatenate
+  y = [ y{ : } ] ;
+  
+  % Min and max y-axis values
+  y = [ min( y ) , max( y ) ] ;
+  
+  % Difference is zero when there is only one data point, quit now
+  if  ~ diff( y ) , return , end
+  
+  % Y-axis limits are +/-2.5% of min to max range
+  ax.YLim = [ -0.025 , +0.025 ] * diff( y )  +  y ;
+  
+  % Set lower point of vertical threshold lines to new lower y-limit
+  for  h = findobj( ax , 'Tag' , 'xthreshold' )'
+    h.YData( 1 ) = ax.YLim( 1 ) ;
+  end
+  
+  % And again, re-position x-threshold labels
+  for  h = findobj( ax , 'Tag' , 'xthlabel' )'
+    h.Position( 2 ) = ax.YLim( 1 ) ;
+  end
+  
+end % fupdate_rt
+
+
+% Generic fupdate function for psychometric and reaction time vs contrast.
+% Has additional scaling factor and names the Welford variance function to
+% use.
+function  data = fupdate_targcon( hdata, data, index, newdata, scale, fvar)
+  
+  % Locate graphics objects by data they represent
+   herr = findobj( hdata , 'Tag' , 'error' ) ;
+  hdata = findobj( hdata , 'Tag' ,  'data' ) ;
+  
+  % Get a copy of the x-axis values i.e. the stimulus values
+  xval = hdata.XData ;
+  
+  % Locate stimulus value
+  i = xval == index.x ;
+  
+  % Update Welford array
+  data.w( i ) = data.w( i ) + newdata ;
+  
+  % Update plots
+  hdata.YData( i ) = scale .* data.w( i ).avg ;
+   herr.YData( i ) = hdata.YData( i ) ;
+   herr.YNegativeDelta( i ) = scale .* data.w( i ).( fvar ) ;
+   herr.YPositiveDelta( i ) = herr.YNegativeDelta( i ) ;
+  
+end % fupdate_targcon
+
+
+% Fit psychometric curve to performance data. Least-squares non-linear
+% regression.
+function  ffit_psych( hfit , hdata , data )
+  
+  % Define function.
+  % Coefficients c = [ guess rate , lapse rate , slope , centre ].
+  fun = @( c , x )  c( 1 )  +  ( 100 - c( 1 ) - c( 2 ) ) ./ ...
+    ( 1 + exp( -c( 3 ) .* ( x - c( 4 ) ) ) ) ;
+  
+  % Lower and upper bounds on coefficients
+  bounds = { [ 0 , 0 , -Inf , -Inf ] , [ 100 , 100 , +Inf , +Inf ] } ; 
+  
+  % Execute fit
+  ffit_targcon( hfit , hdata , data , '%c' , 5 , fun , bounds )
+  
+end % ffit_psych
+
+
+% Fit logistic curve to Avg RT data. Least-squares non-linear regression.
+function  ffit_rt( hfit , hdata , data )
+  
+  % Define function.
+  % Coefficients c = [ baseline , amplitude , slope , centre ].
+  fun = @( c , x )  c( 1 )  +  c( 2 ) ./ ...
+    ( 1 + exp( -c( 3 ) .* ( x - c( 4 ) ) ) ) ;
+  
+  % No bounds
+  bounds = { [] , [] } ;
+  
+  % Execute fit
+	ffit_targcon( hfit , hdata , data , 'rt' , 3 , fun , bounds )
+  
+end % ffit_rt
+
+
+% Generic logistic curve fitting. Assumes 1 x 4 coefficients, and that
+% coefficients 3 and 4 are the slope and centre.
+function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
+  
+  % If count is too low then quit
+  if  any( data.w.count < n ) , return , end
+  
+  % Locate performance data graphics
+  hdata = findobj( hdata , 'Tag' ,  'data' ) ;
+  
+  % Extract x and y coordinates of data
+  x = hdata.XData ;
+  y = hdata.YData ;
+  
+  % Number of data points
+  n = numel( x ) ;
+  
+  % Initialise coefficients
+  c0 = zeros( 1 , 4 ) ;
+  
+  % Set baseline to minimum observed value
+  c0( 1 ) = min( y ) ;
+  
+  % Coefficient 2 has a different meaning for % correct vs RT
+  switch  type
+    case  '%c' , c0( 2 ) = 100 - max( y ) ; % lapse rate
+    case  'rt' , c0( 2 ) = max( y ) - c0( 1 ) ; % amplitude
+  end
+  
+  % Use slope of linear regression line as a starting guess
+  b = [ ones( n , 1 ) , x( : ) ]  \  y( : ) ;
+  
+  % Heuristic decision, reduce magnitude of linear slope
+  c0( 3 ) = b( 2 ) / 10 ;
+  
+  % Get middle x-axis value
+  if  mod( numel( x ) , 2 )
+    c0( 4 ) = x( ceil( n / 2 ) ) ;
+  else
+    c0( 4 ) = mean( x( n / 2 + [ 0 , 1 ] ) ) ;
+  end
+  
+  % Disable lsqcurvefit verbosity
+  opt = optimoptions( 'lsqcurvefit' , 'Display' , 'off' ) ;
+  
+  % Best fit
+  c = lsqcurvefit( fun , c0 , x , y , bounds{ : } , opt ) ;
+  
+  % Locate different elements
+  hcurve = findobj( hfit , 'Tag' , 'curve'      ) ;
+  hxthr  = findobj( hfit , 'Tag' , 'xthreshold' ) ;
+  hxlab  = findobj( hfit , 'Tag' , 'xthlabel'   ) ;
+  hythr  = findobj( hfit , 'Tag' , 'ythreshold' ) ;
+  hylab  = findobj( hfit , 'Tag' , 'ythlabel'   ) ;
+  
+  % Draw best fit line
+  hcurve.YData( : ) = fun( c , hcurve.XData ) ;
+  
+  % Locate the threshold value i.e. x-axis position
+  hxthr.XData( : ) = c( 4 ) ;
+  hythr.XData( : ) = [ hcurve.XData( 1 ) , c( 4 ) ] ;
+  
+  % Locate the performance at threshold
+  hxthr.YData( : ) = [ hxthr.Parent.YLim( 1 ) , fun( c , c( 4 ) ) ] ;
+  hythr.YData( : ) = hxthr.YData( 2 ) ;
+  
+  % Make threshold labels
+  hxlab.String = sprintf( '%.2f' , c( 4 ) ) ;
+  hylab.String = sprintf( '%.2f' , hxthr.YData( 2 ) ) ;
+  
+  % Position labels
+  hxlab.Position( 1 : 2 ) = [ c( 4 ) , hxthr.YData( 1 ) ] ;
+  hylab.Position( 1 : 2 ) = [ hcurve.XData( 1 ) , hxthr.YData( 2 ) ] ;
+  
+end % ffit_targcon
 
 
 % Block-wide reaction time histogram. newdata is the trial error code of
