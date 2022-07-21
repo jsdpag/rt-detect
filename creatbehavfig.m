@@ -639,7 +639,7 @@ function  ffit_rt( hfit , hdata , data )
     ( 1 + exp( -c( 3 ) .* ( x - c( 4 ) ) ) ) ;
   
   % No bounds
-  bounds = { [] , [] } ;
+  bounds = { [ 0 , 0 , -Inf , -Inf ] , [ +Inf , +Inf , +Inf , +Inf ] } ;
   
   % Execute fit
 	ffit_targcon( hfit , hdata , data , 'rt' , 3 , fun , bounds )
@@ -654,12 +654,33 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
   % If count is too low then quit
   if  any( data.w.count < n ) , return , end
   
-  % Locate performance data graphics
+  % Locate graphics objects by data they represent
+   herr = findobj( hdata , 'Tag' , 'error' ) ;
   hdata = findobj( hdata , 'Tag' ,  'data' ) ;
   
   % Extract x and y coordinates of data
   x = hdata.XData ;
   y = hdata.YData ;
+  
+  % Variance of each data point. Symmetrical bars, see fupdate_targcon.
+  v = herr.YPositiveDelta ;
+  
+    % Look for any zero values, otherwise we can't do weighted least-
+    % squares regression on reciprocal of the variance
+    i = v == 0 ;
+    
+    % All of them are zero. Empty v, skipping weighted least-squares.
+    if  all( i ) , v = [ ] ;
+      
+    % Some of them are
+    elseif  any( i )
+      
+      % Set zero-valued variances to something non-zero. Let's use half of
+      % the minimum non-zero value. This way, the zero-variance points will
+      % still have more weight than any other.
+      v( i ) = min( v( ~i ) ) / 2 ;
+      
+    end % var check
   
   % Number of data points
   n = numel( x ) ;
@@ -691,9 +712,23 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
   
   % Disable lsqcurvefit verbosity
   opt = optimoptions( 'lsqcurvefit' , 'Display' , 'off' ) ;
-  
-  % Best fit
+
+  % Best fitting non-linear bounded least-squares
   c = lsqcurvefit( fun , c0 , x , y , bounds{ : } , opt ) ;
+  
+  % Weighted least-squares
+  if  ~ isempty( v )
+    
+    % Take bounded least-squares coefficients as starting point
+    c0 = c ;
+    
+    % Disable verbosity
+    opt = statset( 'Display' , 'off' ) ;
+    
+    % Weighted non-linear least-squares
+    c = nlinfit( x , y , fun , c0 , opt , 'Weights' , 1 ./ v ) ;
+    
+  end % weighted least-squares
   
   % Locate different elements
   hcurve = findobj( hfit , 'Tag' , 'curve'      ) ;
