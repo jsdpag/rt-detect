@@ -269,6 +269,9 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
       ofig.addgroup ( id , nam , dat , h , FUPDATE{ dattyp } )
       ofig.bindparam( id ,   'seldata' , selpar{ : } )
       ofig.bindparam( id , 'unseldata' , unspar{ : } )
+      
+      % Too few points to fit curves, skip to next block
+      if  numel( x ) < 5 , continue , end
 
       % Make curve fitting graphics objects
       h = [ plot( ax , nan( 2 , 2 ) , nan( 2 , 2 ) , 'k--' ) ; 

@@ -13,6 +13,9 @@
 % Session's ARCADE config object
 cfg = retrieveConfig ;
 
+% Condition, block, outcome and reaction time of all previous trials
+pre = getPreviousTrialData ;
+
 % Gain access to block selection function's global variable
 global  ARCADE_BLOCK_SELECTION_GLOBAL ;
 
@@ -124,7 +127,7 @@ if  TrialData.currentTrial == 1
     P.ITIstart.value = zeros( 1 , 'uint64' ) ;
   
   % Create and initialise behaviour plots
-  P.ofig = creatbehavfig( P.tab ) ;
+  P.ofig = creatbehavfig( cfg , P.err , P.tab ) ;
   
 % All subsequent trials
 else
@@ -132,10 +135,65 @@ else
   % Retrieve persistent data
   P = persist ;
   
-  % Update behaviour plots based on previous trial
-  %< HERE >
+  %-- Update behaviour plots based on previous trial --%
   
+    %- Behavioural outcome raster plot -%
+    newdata = struct( 'pre_err', pre.trialError( end - 1 ), ...
+      'pre_block', pre.blocks( end - 1 ), 'nex_block', pre.blocks( end ) );
+    
+    P.ofig.update( 'BehavRaster' , [ ] , newdata )
+    
+    %- Trial info panel -%
+    newdata = struct( 'ind' , TrialData.currentTrial - [ 1 , 0 ] , ...
+      'err' , pre.trialError( end - [ 1 , 0 ] ) , ...
+      'con' , pre.conditions( end - [ 1 , 0 ] ) , ...
+      'blk' , pre.blocks( end - [ 1 , 0 ] ) , ...
+       'rt' , pre.reactionTime( end - [ 1 , 0 ] ) , ...
+      'typ' , [ pre.userVariable{ end - 1 }.BlockType , ...
+        ARCADE_BLOCK_SELECTION_GLOBAL.typ ] , ...
+      'trials' , ARCADE_BLOCK_SELECTION_GLOBAL.count.trials , ...
+      'total' , ARCADE_BLOCK_SELECTION_GLOBAL.count.total ) ;
+    
+    P.ofig.update( 'TrialInfo' , [ ] , newdata )
+    
+    %- Psychometric and reaction time curves -%
+    for  F = { 'Psychometric' , 'Reaction Time' } , f = F{ 1 } ;
+      
+      % Construct graphics object group identifier
+      id = sprintf( '%s Block %d', f, ARCADE_BLOCK_SELECTION_GLOBAL.typ ) ;
+      
+      % Information required to update plots
+      index = struct( 'x' , ...
+        P.tab.Contrast( P.tab.Condition == pre.conditions( end - 1 ) ) ,...
+          'err' , pre.trialError( end - 1 ) ) ;
+      newdata = pre.reactionTime( end - 1 ) ;
+      
+      % Update empirical data and find least-squares best fit
+      P.ofig.update( id , index , newdata )
+      P.ofig.fit( id )
+      
+    end % psych & RT curves
+    
+    %- Reaction time histogram -%
+    
+    % Construct group id
+    id = sprintf( 'RT Block %d' , ARCADE_BLOCK_SELECTION_GLOBAL.typ ) ;
+    
+    % Update histogram
+    index = pre.reactionTime( end - 1 ) ;
+    newdata = pre.trialError( end - 1 ) ;
+    P.ofig.update( id , index , newdata )
+    
+    % Select groups for new block %
+    if  diff( pre.blocks( end - [ 1 , 0 ] ) )
+      id = sprintf( 'Block %d' , ARCADE_BLOCK_SELECTION_GLOBAL.typ ) ;
+      P.ofig.select( 'set' , id )
+    end
+    
 end % first trial init
+
+%- Show changes to plots -%
+drawnow
 
 
 %%% Trial variables %%%
