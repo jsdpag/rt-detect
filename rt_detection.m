@@ -383,6 +383,11 @@ end
 % Special actions executed when state is finished executing. Remember to
 % make this a column vector of cells.
 
+  % Pause briefly to allow the first couple of FIXUPDATE events to stream
+  % from EyeLink to EyeLinkServer, which then needs time to adjust Win32
+  % events pertaining to target windows
+  ENDACT.GetSaccadeTarget = { @( ) sleep( 75 ) } ;
+
   % Correct state. Calculate reaction time, convert unit from seconds to
   % milliseconds. Report RT.
   ENDACT.Correct = ...
