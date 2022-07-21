@@ -654,6 +654,21 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
   % If count is too low then quit
   if  any( data.w.count < n ) , return , end
   
+  % Least-square fitting functions' options objects, disable verbosity
+  persistent  opt
+  
+    % First execution of function
+    if  isempty( opt )
+      
+      % Create options objects just once
+      opt.lsqcurvefit = optimoptions( 'lsqcurvefit' , 'Display' , 'off' ) ;
+      opt.nlinfit     =      statset( 'Display' , 'off' ) ;
+      
+      % And grab the default state of Matlab's warnings
+      opt.w = warning ;
+      
+    end % first run
+  
   % Locate graphics objects by data they represent
    herr = findobj( hdata , 'Tag' , 'error' ) ;
   hdata = findobj( hdata , 'Tag' ,  'data' ) ;
@@ -710,11 +725,11 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
     c0( 4 ) = mean( x( n / 2 + [ 0 , 1 ] ) ) ;
   end
   
-  % Disable lsqcurvefit verbosity
-  opt = optimoptions( 'lsqcurvefit' , 'Display' , 'off' ) ;
-
+  % Disable all warnings
+  warning off all
+  
   % Best fitting non-linear bounded least-squares
-  c = lsqcurvefit( fun , c0 , x , y , bounds{ : } , opt ) ;
+  c = lsqcurvefit( fun , c0 , x , y , bounds{ : } , opt.lsqcurvefit ) ;
   
   % Weighted least-squares
   if  ~ isempty( v )
@@ -722,13 +737,13 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
     % Take bounded least-squares coefficients as starting point
     c0 = c ;
     
-    % Disable verbosity
-    opt = statset( 'Display' , 'off' ) ;
-    
     % Weighted non-linear least-squares
-    c = nlinfit( x , y , fun , c0 , opt , 'Weights' , 1 ./ v ) ;
+    c = nlinfit( x , y , fun , c0 , opt.nlinfit , 'Weights' , 1 ./ v ) ;
     
   end % weighted least-squares
+  
+  % Default warnings
+  warning( opt.w )
   
   % Locate different elements
   hcurve = findobj( hfit , 'Tag' , 'curve'      ) ;
