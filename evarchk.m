@@ -1,7 +1,8 @@
 
 function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   RfWinFactor , FixTolDeg , BaselineMs , WaitAvgMs , WaitMaxProb , ...
-    RewardSlope , RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs )
+    ReacTimeMinMs , RespWinWidMs , RewardSlope , RewardMinMs , ...
+      RewardFailFrac , ScreenGamma , ItiMinMs )
 % 
 % evarchk( <ARCADE editable variables> )
 % 
@@ -19,6 +20,8 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   lim.BaselineMs = [ 0 , Inf ] ;
   lim.WaitAvgMs = [ 0 , Inf ] ;
   lim.WaitMaxProb = [ 0 , 1 ] ;
+  lim.ReacTimeMinMs = [ 0 , Inf ] ;
+  lim.RespWinWidMs = [ 0 , Inf ] ;
   lim.RewardSlope = [ 0 , Inf ] ;
   lim.RewardMinMs = [ 0 , Inf ] ;
   lim.RewardFailFrac = [ 0 , 1 ] ;
@@ -35,6 +38,8 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   v.BaselineMs = BaselineMs ;
   v.WaitAvgMs = WaitAvgMs ;
   v.WaitMaxProb = WaitMaxProb ;
+  v.ReacTimeMinMs = ReacTimeMinMs ;
+  v.RespWinWidMs = RespWinWidMs ;
   v.RewardSlope = RewardSlope ;
   v.RewardMinMs = RewardMinMs ;
   v.RewardFailFrac = RewardFailFrac ;

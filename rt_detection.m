@@ -200,8 +200,9 @@ drawnow
 
 % Error check editable variables
 v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
-  FixTolDeg , BaselineMs , WaitAvgMs , WaitMaxProb , RewardSlope , ...
-    RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs ) ;
+  FixTolDeg , BaselineMs , WaitAvgMs , WaitMaxProb , ReacTimeMinMs , ...
+    RespWinWidMs , RewardSlope , RewardMinMs , RewardFailFrac , ...
+      ScreenGamma , ItiMinMs ) ;
   
 % Add type of block
 v.BlockType = ARCADE_BLOCK_SELECTION_GLOBAL.typ ;
@@ -418,8 +419,8 @@ STATE_TABLE = ...
 {           'Start' , 5000 , 'Ignored'        ,     'FixIn' , 'HoldFix' , { 'Stim' , { P.Fix } , 'StimProp' , { P.Fix , 'faceColor' , [ 000 , 000 , 000 ] } , 'Photodiode' , 'off' , 'Reset' , P.Waiting } ;
           'HoldFix' ,  300 , 'Wait'           ,    'FixOut' , 'GetFix' , { 'StimProp' , { P.Fix , 'faceColor' , [ 255 , 255 , 255 ] } } ;
              'Wait' ,WaitMs, 'TargetOn'       ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , [ { 'Reset' , [ P.StartSacc , P.EndSacc , P.BlinkStart , P.BlinkEnd , P.FalseAlarmFlag ] , 'Trigger' , P.Waiting , 'Photodiode' , 'on' , 'Stim' , { FixMask , BackFlic } } , WaitBak ] ;
-         'TargetOn' ,  100 , 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
-   'ResponseWindow' ,  400 , 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
+     'TargetOn' ,ReacTimeMinMs, 'ResponseWindow' ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'FalseAlarmSaccade' } , { 'Stim' , { Target } , 'Photodiode' , 'off' , 'RunTimeVal' , P.RTstart } ;
+'ResponseWindow', RespWinWidMs, 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
           'Saccade' ,  125 , 'BrokenSaccade'  ,  { 'BlinkStart' , 'EndSacc' } , { 'Blink' , 'GetSaccadeTarget' } , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
  'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
          'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixIn' , 'FixOut' } , { 'TargetSelected' , 'Microsaccade' , 'NothingSelected' } , {} ;
