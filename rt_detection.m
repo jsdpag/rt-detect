@@ -203,7 +203,10 @@ v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
   FixTolDeg , BaselineMs , WaitAvgMs , WaitMaxProb , ReacTimeMinMs , ...
     RespWinWidMs , RewardSlope , RewardMinMs , RewardFailFrac , ...
       ScreenGamma , ItiMinMs ) ;
-  
+
+% Record pixels per degree, computed locally
+v.pixperdeg = P.pixperdeg ;
+
 % Add type of block
 v.BlockType = ARCADE_BLOCK_SELECTION_GLOBAL.typ ;
 
