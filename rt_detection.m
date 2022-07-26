@@ -65,6 +65,9 @@ if  TrialData.currentTrial == 1
   P.pixperdeg = ( cfg.DistanceToScreen * tand( 1 ) )  *  ...
     ( sqrt( sum( P.screensize .^ 2 ) ) / cfg.MonitorDiagonalSize ) ;
   
+  % Screen size in degrees
+  P.screendegs = P.screensize ./ P.pixperdeg ;
+  
   % Previous trial eye track window parameters
   P.EyeTrack = struct( 'RfXDeg' , NaN , 'RfYDeg' , NaN , ...
     'RfRadDeg' , NaN , 'RfWinFactor' , NaN , 'FixTolDeg' , NaN ) ;
@@ -200,9 +203,9 @@ drawnow
 
 % Error check editable variables
 v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
-  FixTolDeg , BaselineMs , WaitAvgMs , WaitMaxProb , ReacTimeMinMs , ...
-    RespWinWidMs , RewardSlope , RewardMinMs , RewardFailFrac , ...
-      ScreenGamma , ItiMinMs ) ;
+  FixTolDeg , TrainingMode , BaselineMs , WaitAvgMs , WaitMaxProb , ...
+    ReacTimeMinMs , RespWinWidMs , RewardSlope , RewardMinMs , ...
+      RewardFailFrac , ScreenGamma , ItiMinMs ) ;
 
 % Record pixels per degree, computed locally
 v.pixperdeg = P.pixperdeg ;
@@ -210,6 +213,27 @@ v.pixperdeg = P.pixperdeg ;
 % Add type of block
 v.BlockType = ARCADE_BLOCK_SELECTION_GLOBAL.typ ;
 
+% In training mode, we randomly sample the target location and size. This
+% will affect the value of the relevant editable variables.
+switch  TrainingMode
+  
+  % Training mode is disabled, do not sample target parameters
+  case    'off' , sampletarg = false ;
+    
+  % Sample on every trial
+  case  'trial' , sampletarg =  true ;
+    
+  % Sample only on first trial of a new block
+  case  'block' , sampletarg = TrialData.currentTrial == 1  ||  ...
+                               pre.blocks( end - 1 ) ~= pre.blocks( end ) ;
+    
+  % evarchk should screen this out. If not then it is incorrect.
+  otherwise , error( 'Invalid TrainingMode string: %s' , TrainingMode )
+    
+end % eval TrainingMode
+
+% Sample target position and update the value of editable variables
+if  sampletarg , [ v, RfXDeg, RfYDeg, RfRadDeg ] = newtarget( P , v ) ; end
 
 % Convert variables with degrees into pixels, without destroying original
 % value in degrees
@@ -677,4 +701,69 @@ function  I = Weber( c , Ib )
 end % Weber
 
 
+% Sample target location and size. Update editable variables. Input args
+% include task script persistent variables and current value of editable
+% variables.
+function  [ v , RfXDeg , RfYDeg , RfRadDeg ] = newtarget( P , v )
+  
+  % Safeguard against infinite loop
+  counter = 0 ;
+  
+  % Half of screen size in degrees
+  hdegs = P.screendegs ./ 2 ;
+  
+  % Sample appropriate target location
+  while  counter < 1e4
+    
+    % Generate cartesian coordinate in degrees from fixation point
+    xy = P.screendegs .* rand( 1 , 2 )  -  hdegs ;
+    
+    % Round to nearest hundredth
+    xy = round( xy , 2 ) ;
+    
+    % Eccentricity of point
+    ecc = sqrt( sum( xy .^ 2 ) ) ;
+    
+    % RF centre radius, according to linear fit from Cavanaugh, Bair,
+    % Movshon. 2002. J Neurophys. 88:2530-2546.
+    rad = ( 0.0456 * ecc + 0.997 ) / 2 ;
+    
+    % Round to nearest hundreth
+    rad = round( rad , 2 ) ;
+    
+    % Sampled RF centre must be a full RF radius away from fixation window
+    % and also a full RF radius away from monitor edges. If not then
+    % resample target location.
+    if  ecc < v.FixTolDeg + rad  ||  any( rad > hdegs - abs( xy ) )
+      continue
+    end
+    
+  end % sample targ location
+  
+  % Assign values
+  v.RfXDeg = xy( 1 ) ;  v.RfYDeg = xy( 2 ) ;  v.RfRadDeg = rad ;
+  
+  % Re-assign workspace variables of same name
+    RfXDeg = v.RfXDeg   ;
+    RfYDeg = v.RfYDeg   ;
+  RfRadDeg = v.RfRadDeg ;
+  
+  % Fetch ARCADE session behavioural store 
+  BHVstore = SGLBehaviouralStore.launch ;
+  
+  % Editable variable names
+  nam = BHVstore.cfg.EditableVariables( : , 1 ) ;
+  
+  % Editable variables to update
+  for  E = { 'RfXDeg' , 'RfYDeg' , 'RfRadDeg' } , e = E{ 1 } ;
+    
+    % Find location in table
+    i = strcmp( nam , e ) ;
+    
+    % Update value
+    BHVstore.cfg.EditableVariables{ i , 2 } = num2str( v.( e ) ) ;
+    
+  end % editable variables
+  
+end % newtarget
 
