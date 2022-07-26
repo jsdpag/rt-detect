@@ -7,7 +7,7 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
-% dbstop in rt_detection.m at 14
+
 %%% GLOBAL INITIALISATION %%%
 
 % Session's ARCADE config object
@@ -32,6 +32,9 @@ if  TrialData.currentTrial == 1
   
     % Task-specific validity tests on block definition table
     P.tab = tabvalchk( P.tab , P.constrreg ) ;
+    
+    % Are there any trial conditions that mirror the target?
+    P.mirror = any( strcmp( P.tab.Mirror , 'on' ) ) ;
   
   % Handle to session's behavioural store object
   P.bhv = SGLBehaviouralStore.launch ;
@@ -287,6 +290,12 @@ if  ~ all(  cellfun( @( f ) v.( f ) == P.EyeTrack.( f ) , ...
   trackeye( [ vpix.RfXDeg , vpix.RfYDeg ] , vpix.RfRadDeg * RfWinFactor,...
     'Target' ) ;
   
+  % Mirrored target position is used, so make a corresponding window
+  if  P.mirror
+    trackeye( -[ vpix.RfXDeg , vpix.RfYDeg ] , ...
+      vpix.RfRadDeg * RfWinFactor , 'Mirror' ) ;
+  end
+  
   % Remember new values
   for  F = fieldnames( P.EyeTrack )' , f = F{ 1 } ;
     P.EyeTrack.( f ) = v.( f ) ;
@@ -294,12 +303,21 @@ if  ~ all(  cellfun( @( f ) v.( f ) == P.EyeTrack.( f ) , ...
 
 end % update eye windows
 
-
-%%% Stimulus configuration %%%
-
-% Get properties of current trial condition
+% Properties of current trial condition. Used in 'Stimulus configuration'.
 c = table2struct(  ...
       P.tab( TrialData.currentCondition == P.tab.Condition , : )  ) ;
+
+% Evaluate target mirroring. If mirror is on then the target is reflected
+% across the fixation point. Make sure that the correct eye window is used
+% to evaluate behaviour.
+switch  c.Mirror
+  case   'on' , TargetIn = 'MirrorIn' ;
+  case  'off' , TargetIn = 'TargetIn' ;
+  otherwise , error( 'Invalid Mirror value: %s' , c.Mirror )
+end
+
+
+%%% Stimulus configuration %%%
 
 % Reset flicker colour
 P.Flicker.stim.faceColor( : ) = double( intmax( 'uint8' ) ) ;
@@ -362,6 +380,11 @@ if  c.BackgroundFlickerHz
 else , BackFlic = P.Target.none ; FixMask = P.Target.none ;
 end
 
+% Apply optional reflection of target position across fixation point. This
+% coefficient can be multiplied into the set target location. mirror is +1
+% if mirror is off, and it is -1 if the mirror is on.
+mirror = strcmp( c.Mirror , 'off' ) - strcmp( c.Mirror , 'on' ) ;
+
 % Point to specified target
 Target = P.Target.( c.Target ) ;
 
@@ -372,7 +395,7 @@ Target = P.Target.( c.Target ) ;
       
     case  'gaussian'
       
-      Target.position = [ vpix.RfXDeg , vpix.RfYDeg ] ;
+      Target.position = mirror .* [ vpix.RfXDeg , vpix.RfYDeg ] ;
       Target.sdx = vpix.RfRadDeg / 3 ;
       Target.sdy = Target.sdx ;
       Target.color( : ) = Weber( c.Contrast , WaitBak{ 2 } ) ;
@@ -450,7 +473,7 @@ STATE_TABLE = ...
 'ResponseWindow', RespWinWidMs, 'Failed'         ,  { 'FixOut' , 'StartSacc' } , { 'BrokenFix' , 'Saccade' } , { 'Reset' , P.Waiting } ;
           'Saccade' ,  125 , 'BrokenSaccade'  ,  { 'BlinkStart' , 'EndSacc' } , { 'Blink' , 'GetSaccadeTarget' } , { 'Reset' , P.StartFix , 'RunTimeVal' , P.RTend } ;
  'GetSaccadeTarget' ,  100 , 'EyeTrackError'  ,  'StartFix' , 'Evaluate' , {} ;
-         'Evaluate' ,    0 , 'EyeTrackError'  ,  { 'TargetIn' , 'FixIn' , 'FixOut' } , { 'TargetSelected' , 'Microsaccade' , 'NothingSelected' } , {} ;
+         'Evaluate' ,    0 , 'EyeTrackError'  ,  { TargetIn , 'FixIn' , 'FixOut' } , { 'TargetSelected' , 'Microsaccade' , 'NothingSelected' } , {} ;
    'TargetSelected' ,    0 , 'Correct'        , 'FalseAlarmFlag' , 'FalseAlarm' , {} ;
      'Microsaccade' ,    0 , 'EyeTrackError'  , {} , {} , {} ;
   'NothingSelected' ,    0 , 'Missed'         ,   'Waiting' , 'BrokenFix' , {} ;
@@ -587,7 +610,7 @@ function  tab = tabvalchk( tab , cstrreg )
   
   % Required columns, the set of column headers
   colnam = { 'ItiStimulus' , 'WaitBackground' , 'BackgroundFlickerHz' , ...
-    'Target' , 'Contrast' } ;
+    'Target' , 'Contrast' , 'Mirror' } ;
   
   % Numerical type check
   fnumchk = @( c ) isnumeric( c ) && isreal( c ) && all( isfinite( c ) ) ;
@@ -614,6 +637,7 @@ function  tab = tabvalchk( tab , cstrreg )
   valid.BackgroundFlickerHz = fnumchk ;
   valid.Target = @iscellstr ;
   valid.Contrast = fnumchk ;
+  valid.Mirror = @iscellstr ;
   
   % Support, what values are valid for each column?
   sup.ItiStimulus = { 'none' , 'mondrian' } ;
@@ -621,6 +645,7 @@ function  tab = tabvalchk( tab , cstrreg )
   sup.BackgroundFlickerHz = [ 0 , round( StimServer.GetFrameRate ) / 2 ] ;
   sup.Target = { 'none' , 'gaussian' } ;
   sup.Contrast = [ -1 , +1 ] ;
+  sup.Mirror = { 'off' , 'on' } ;
   
   % Support check function
   supchk.ItiStimulus = fstrsup ;
@@ -629,6 +654,7 @@ function  tab = tabvalchk( tab , cstrreg )
   supchk.BackgroundFlickerHz = fnumsup ;
   supchk.Target = fstrsup ;
   supchk.Contrast = fnumsup ;
+  supchk.Mirror = fstrsup ;
   
   % Define support error message
   superr.ItiStimulus = fstrerr( sup.ItiStimulus ) ;
@@ -636,6 +662,7 @@ function  tab = tabvalchk( tab , cstrreg )
   superr.BackgroundFlickerHz = fnumerr( sup.BackgroundFlickerHz ) ;
   superr.Target = fstrerr( sup.Target ) ;
   superr.Contrast = fnumerr( sup.Contrast ) ;
+  superr.Mirror = fstrerr( sup.Mirror ) ;
   
   % Retrieve table's name
   tabnam = tab.Properties.UserData ;
