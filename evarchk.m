@@ -63,10 +63,20 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
       % Make sure that string is lower case
       v.( n ) = lower( v.( n ) ) ;
       
-      % String not found in set of valid strings
+      % String not found in set of valid strings. Don't kill session. But
+      % do warn user.
       if  ~ any( strcmp( v.( n ) , lim.( n ) ) )
-        error( '%s must be one of: %s' , n , strjoin( lim.( n ) , ', ' ) )
-      end
+        
+        % Format the warning string
+        wstr = sprintf( '%s must be one of: %s' , ...
+          n , strjoin( lim.( n ) , ', ' ) ) ;
+        
+        % Print in both echo server window, the command window, and error
+        % log
+        EchoServer.Write( wstr )
+        warning( wstr )
+        
+      end % invalid string
       
     % All remaining variables must be of double numeric type
     elseif  ~ isa( v.( n ) , 'double' )

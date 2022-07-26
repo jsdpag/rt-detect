@@ -228,8 +228,8 @@ switch  TrainingMode
                                pre.blocks( end - 1 ) ~= pre.blocks( end ) ;
     
   % evarchk should screen this out. If not then it is incorrect.
-  otherwise , error( 'Invalid TrainingMode string: %s' , TrainingMode )
-    
+  otherwise , warning( 'Invalid TrainingMode string: %s' , TrainingMode )
+              sampletarg = false ;
 end % eval TrainingMode
 
 % Sample target position and update the value of editable variables
@@ -734,8 +734,8 @@ function  [ v , RfXDeg , RfYDeg , RfRadDeg ] = newtarget( P , v )
     % Sampled RF centre must be a full RF radius away from fixation window
     % and also a full RF radius away from monitor edges. If not then
     % resample target location.
-    if  ecc < v.FixTolDeg + rad  ||  any( rad > hdegs - abs( xy ) )
-      continue
+    if  ecc >= v.FixTolDeg + rad  &&  all( rad <= hdegs - abs( xy ) )
+      break
     end
     
   end % sample targ location
