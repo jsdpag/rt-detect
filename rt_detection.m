@@ -254,7 +254,8 @@ WaitMs = min( exprnd( WaitAvgMs ) , expinv( WaitMaxProb , WaitAvgMs ) ) ;
 
 % Compute reward size for correct performance
 rew = rewardsize( P.err.Correct , ...
-  expcdf( WaitMs , WaitAvgMs ) / WaitMaxProb , RewardSlope , RewardMaxMs );
+  expcdf( WaitMs , WaitAvgMs ) / WaitMaxProb , RewardSlope , ...
+    RewardMinMs , RewardMaxMs );
   
   % And for failed trial [ correct reward , failed reward ]
   rew = [ rew , RewardFailFrac * rew ] ;
