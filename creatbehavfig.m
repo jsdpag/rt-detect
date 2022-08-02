@@ -619,10 +619,10 @@ end % fupdate_targcon
 % regression.
 function  ffit_psych( hfit , hdata , data )
   
-  % Define function.
-  % Coefficients c = [ guess rate , lapse rate , slope , centre ].
-  fun = @( c , x )  c( 1 )  +  ( 100 - c( 1 ) - c( 2 ) ) ./ ...
-    ( 1 + exp( -c( 3 ) .* ( x - c( 4 ) ) ) ) ;
+  % Define Weibull function.
+  % Coefficients c = [ guess rate , lapse rate , shape , threshold ].
+  fun = @( c , x )  c( 1 )  +  ( 100 - c( 1 ) - c( 2 ) ) .* ...
+    ( 1  -  exp( -( x ./ c( 4 ) ) .^ c( 3 ) ) ) ;
   
   % Lower and upper bounds on coefficients
   bounds = { [ 0 , 0 , -Inf , -Inf ] , [ 100 , 100 , +Inf , +Inf ] } ; 
@@ -636,7 +636,7 @@ end % ffit_psych
 % Fit logistic curve to Avg RT data. Least-squares non-linear regression.
 function  ffit_rt( hfit , hdata , data )
   
-  % Define function.
+  % Define logistic function.
   % Coefficients c = [ baseline , amplitude , slope , centre ].
   fun = @( c , x )  c( 1 )  +  c( 2 ) ./ ...
     ( 1 + exp( -c( 3 ) .* ( x - c( 4 ) ) ) ) ;
@@ -709,17 +709,20 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
   % Set baseline to minimum observed value
   c0( 1 ) = min( y ) ;
   
-  % Coefficient 2 has a different meaning for % correct vs RT
+  % Coefficient 2 has a different meaning for % correct vs RT. In both
+  % cases, set slope coefficient to estimate parameter 3.
   switch  type
     case  '%c' , c0( 2 ) = 100 - max( y ) ; % lapse rate
+                   scoef = 100 ;
     case  'rt' , c0( 2 ) = max( y ) - c0( 1 ) ; % amplitude
+                   scoef =  10 ;
   end
   
   % Use slope of linear regression line as a starting guess
   b = [ ones( n , 1 ) , x( : ) ]  \  y( : ) ;
   
   % Heuristic decision, reduce magnitude of linear slope
-  c0( 3 ) = b( 2 ) / 10 ;
+  c0( 3 ) = b( 2 ) / scoef ;
   
   % Get middle x-axis value
   if  mod( numel( x ) , 2 )
