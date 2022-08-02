@@ -625,7 +625,7 @@ function  ffit_psych( hfit , hdata , data )
     ( 1  -  exp( -( x ./ c( 4 ) ) .^ c( 3 ) ) ) ;
   
   % Lower and upper bounds on coefficients
-  bounds = { [ 0 , 0 , -Inf , -Inf ] , [ 100 , 100 , +Inf , +Inf ] } ; 
+  bounds = { [ 0 , 0 , 0 , 0 ] , [ 100 , 100 , +Inf , +Inf ] } ; 
   
   % Execute fit
   ffit_targcon( hfit , hdata , data , '%c' , 5 , fun , bounds )
@@ -744,7 +744,14 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
     c0 = c ;
     
     % Weighted non-linear least-squares
-    c = nlinfit( x , y , fun , c0 , opt.nlinfit , 'Weights' , 1 ./ v ) ;
+    try
+      c = nlinfit( x , y , fun , c0 , opt.nlinfit , 'Weights' , 1 ./ v ) ;
+    catch  ME
+      switch  ME.identifier
+        case  'stats:nlinfit:NonFiniteFunOutput' , c = c0 ;
+        otherwise , rethrow( ME )
+      end
+    end
     
   end % weighted least-squares
   
