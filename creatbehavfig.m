@@ -713,7 +713,7 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
   % cases, set slope coefficient to estimate parameter 3.
   switch  type
     case  '%c' , c0( 2 ) = 100 - max( y ) ; % lapse rate
-                   scoef = 100 ;
+                   scoef = 500 ;
     case  'rt' , c0( 2 ) = max( y ) - c0( 1 ) ; % amplitude
                    scoef =  10 ;
   end
