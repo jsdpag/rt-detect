@@ -665,7 +665,7 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
       
       % Create options objects just once
       opt.lsqcurvefit = optimoptions( 'lsqcurvefit' , 'Display' , 'off' ) ;
-      opt.nlinfit     =      statset( 'Display' , 'off' ) ;
+      opt.lsqnonlin   = optimoptions(   'lsqnonlin' , 'Display' , 'off' ) ;
       
       % And grab the default state of Matlab's warnings
       opt.w = warning ;
@@ -673,32 +673,32 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
     end % first run
   
   % Locate graphics objects by data they represent
-%    herr = findobj( hdata , 'Tag' , 'error' ) ;
+   herr = findobj( hdata , 'Tag' , 'error' ) ;
   hdata = findobj( hdata , 'Tag' ,  'data' ) ;
   
   % Extract x and y coordinates of data
   x = hdata.XData ;
   y = hdata.YData ;
   
-%   % Variance of each data point. Symmetrical bars, see fupdate_targcon.
-%   v = herr.YPositiveDelta ;
-%   
-%     % Look for any zero values, otherwise we can't do weighted least-
-%     % squares regression on reciprocal of the variance
-%     i = v == 0 ;
-%     
-%     % All of them are zero. Empty v, skipping weighted least-squares.
-%     if  all( i ) , v = [ ] ;
-%       
-%     % Some of them are
-%     elseif  any( i )
-%       
-%       % Set zero-valued variances to something non-zero. Let's use half of
-%       % the minimum non-zero value. This way, the zero-variance points will
-%       % still have more weight than any other.
-%       v( i ) = min( v( ~i ) ) / 2 ;
-%       
-%     end % var check
+  % Variance of each data point. Symmetrical bars, see fupdate_targcon.
+  v = herr.YPositiveDelta ;
+  
+    % Look for any zero values, otherwise we can't do weighted least-
+    % squares regression on reciprocal of the variance
+    i = v == 0 ;
+    
+    % All of them are zero. Empty v, skipping weighted least-squares.
+    if  all( i ) , v = [ ] ;
+      
+    % Some of them are
+    elseif  any( i )
+      
+      % Set zero-valued variances to something non-zero. Let's use half of
+      % the minimum non-zero value. This way, the zero-variance points will
+      % still have more weight than any other.
+      v( i ) = min( v( ~i ) ) / 2 ;
+      
+    end % var check
   
   % Number of data points
   n = numel( x ) ;
@@ -734,26 +734,28 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
   % Disable all warnings
   warning off all
   
-  % Best fitting non-linear bounded least-squares
-  c = lsqcurvefit( fun , c0 , x , y , bounds{ : } , opt.lsqcurvefit ) ;
-  
+  % Least-squares without weighting when variances are all zero
+  if  isempty( v )
+    
+    % Best fitting non-linear bounded least-squares
+    c = lsqcurvefit( fun , c0 , x , y , bounds{ : } , opt.lsqcurvefit ) ;
+    
   % Weighted least-squares
-%   if  ~ isempty( v )
-%     
-%     % Take bounded least-squares coefficients as starting point
-%     c0 = c ;
-%     
-%     % Weighted non-linear least-squares
-%     try
-%       c = nlinfit( x , y , fun , c0 , opt.nlinfit , 'Weights' , 1 ./ v ) ;
-%     catch  ME
-%       switch  ME.identifier
-%         case  'stats:nlinfit:NonFiniteFunOutput' , c = c0 ;
-%         otherwise , rethrow( ME )
-%       end
-%     end
-%     
-%   end % weighted least-squares
+  else
+    
+    % Compute weights
+    weights = 1 ./ v ;
+    
+    % Normalise weights
+    weights = weights ./ sum( weights ) ;
+    
+    % Build a residuals function to minimise
+    res = @( c ) fresidual( x , y , weights , fun , c ) ;
+    
+    % Weighted non-linear least-squares
+    c = lsqnonlin( res , c0 , bounds{ : } , opt.lsqnonlin ) ;
+    
+  end % weighted least-squares
   
   % Default warnings
   warning( opt.w )
@@ -785,6 +787,16 @@ function  ffit_targcon( hfit , hdata , data , type , n , fun , bounds )
   hylab.Position( 1 : 2 ) = [ hcurve.XData( 1 ) , hxthr.YData( 2 ) ] ;
   
 end % ffit_targcon
+
+
+% Home-made residual/objective function for lsqnonlin. This allows weighted
+% regression and also a bounded parameter search. fh is a function as
+% accepted by lsqcurvefit.
+function  res = fresidual( xdata , ydata , weights , funchandle , coef )
+
+  res = weights .* ( funchandle( coef , xdata ) - ydata ) ;
+
+end % res
 
 
 % Block-wide reaction time histogram. newdata is the trial error code of
