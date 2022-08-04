@@ -276,7 +276,8 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
       % Make curve fitting graphics objects
       h = [ plot( ax , nan( 2 , 2 ) , nan( 2 , 2 ) , 'k--' ) ; 
             text( ax , nan( 1 , 2 ) , nan( 1 , 2 ) , { '' , '' } , ...
-              'FontName' , 'Arial' , 'VerticalAlignment' , 'bottom' ) ]' ;
+              'FontName' , 'Arial' , 'VerticalAlignment' , 'bottom' , ...
+                'Clipping' , 'on' ) ]' ;
 
       % Tag them
       h( 1 ).Tag = 'xthreshold' ;  h( 3 ).Tag = 'xthlabel' ;
