@@ -604,6 +604,10 @@ function  data = fupdate_targcon( hdata, data, index, newdata, scale, fvar)
   % Locate stimulus value
   i = xval == index.x ;
   
+  if  ~ any( i )
+    error( 'Cannot find given index value for this group.' )
+  end
+  
   % Update Welford array
   data.w( i ) = data.w( i ) + newdata ;
   

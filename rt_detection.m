@@ -166,7 +166,8 @@ else
     for  F = { 'Psychometric' , 'Reaction Time' } , f = F{ 1 } ;
       
       % Construct graphics object group identifier
-      id = sprintf( '%s Block %d', f, ARCADE_BLOCK_SELECTION_GLOBAL.typ ) ;
+      id = sprintf( '%s Block %d' , ...
+        f , pre.userVariable{ end - 1 }.BlockType ) ;
       
       % Information required to update plots
       index = struct( 'x' , ...
@@ -183,7 +184,7 @@ else
     %- Reaction time histogram -%
     
     % Construct group id
-    id = sprintf( 'RT Block %d' , ARCADE_BLOCK_SELECTION_GLOBAL.typ ) ;
+    id = sprintf( 'RT Block %d' , pre.userVariable{ end - 1 }.BlockType ) ;
     
     % Update histogram
     index = pre.reactionTime( end - 1 ) ;
