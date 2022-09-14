@@ -86,6 +86,7 @@ if  TrialData.currentTrial == 1
   
   % Create target stimulus objects, a bit of trickery required to create an
   % empty Stimulus object for 'none'.
+  P.Target.circle   = Circle ;
   P.Target.gaussian = Gaussian ;
   P.Target.none     = P.Target.gaussian( [ ] ) ;
   
@@ -645,7 +646,7 @@ function  tab = tabvalchk( tab , cstrreg )
   sup.ItiStimulus = { 'none' , 'mondrian' } ;
   sup.WaitBackground = { 'default' , 'red' , 'black' } ;
   sup.BackgroundFlickerHz = [ 0 , round( StimServer.GetFrameRate ) / 2 ] ;
-  sup.Target = { 'none' , 'gaussian' } ;
+  sup.Target = { 'none' , 'gaussian' , 'circle' } ;
   sup.Contrast = [ -1 , +1 ] ;
   sup.Mirror = { 'off' , 'on' } ;
   
