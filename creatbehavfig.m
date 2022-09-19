@@ -33,9 +33,19 @@ function  ofig = creatbehavfig( cfg , err , tab )
   blk.nam = arrayfun( @( t ) sprintf( 'Block %d' , t ) , blk.typ , ...
     'UniformOutput' , false ) ;
   
-  % Global minimum and maximum contrast value
-  blk.min = min( [ blk.x{ : } ] ) ;
-  blk.max = max( [ blk.x{ : } ] ) ;
+  % Concatenate x values
+  x = [ blk.x{ : } ] ;
+  
+  % Global minimum and maximum contrast value when x is scalar
+  if  isscalar( x )
+  
+    % Generate a small interval around the individual value
+    blk.min = x  -  0.025 * x ;
+    blk.max = x  +  0.025 * x ;
+    
+  % Multiple x values given
+  else , blk.min = min( x ) ;  blk.max = max( x ) ;
+  end
   
   % Range
   blk.rng = blk.max - blk.min ;
@@ -564,8 +574,8 @@ function  data = fupdate_rt( hdata , data , index , newdata )
   % Return all y-axis values
   y = get( h , 'YData' ) ;
   
-  % Concatenate
-  y = [ y{ : } ] ;
+  % Concatenate across multiple objects
+  if  iscell( y ) , y = [ y{ : } ] ; end
   
   % Min and max y-axis values
   y = [ min( y ) , max( y ) ] ;
