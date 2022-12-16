@@ -7,6 +7,8 @@
 % time detection task used by Jackson Smith's optogenetics project in the
 % lab of Pascal Fries.
 % 
+% Total power = LaserMaxPowerPerChan_mW * PowerScaleCoef * NumLaserChanOut
+% 
 
 %%% GLOBAL INITIALISATION %%%
 
@@ -613,7 +615,8 @@ function  tab = tabvalchk( tab , cstrreg )
   
   % Required columns, the set of column headers
   colnam = { 'ItiStimulus' , 'WaitBackground' , 'BackgroundFlickerHz' , ...
-    'Target' , 'Contrast' , 'Mirror' } ;
+    'Target' , 'Contrast' , 'Mirror' , 'Laser' , 'LaserFreqHz' , ...
+      'LaserMaxPowerPerChan_mW' , 'LaserEnvelope' } ;
   
   % Numerical type check
   fnumchk = @( c ) isnumeric( c ) && isreal( c ) && all( isfinite( c ) ) ;
@@ -641,6 +644,10 @@ function  tab = tabvalchk( tab , cstrreg )
   valid.Target = @iscellstr ;
   valid.Contrast = fnumchk ;
   valid.Mirror = @iscellstr ;
+  valid.Laser = @iscellstr ;
+  valid.LaserFreqHz = fnumchk ;
+  valid.LaserMaxPowerPerChan_mW = fnumchk ;
+  valid.LaserEnvelope = @iscellstr ;
   
   % Support, what values are valid for each column?
   sup.ItiStimulus = { 'none' , 'mondrian' } ;
@@ -649,6 +656,10 @@ function  tab = tabvalchk( tab , cstrreg )
   sup.Target = { 'none' , 'gaussian' , 'circle' } ;
   sup.Contrast = [ -1 , +1 ] ;
   sup.Mirror = { 'off' , 'on' } ;
+  sup.Laser = { 'none' , 'test' , 'control' } ;
+  sup.LaserFreqHz = [ 0 , 200 ] ;
+  sup.LaserMaxPowerPerChan_mW = [ 0 , 20 ] ;
+  sup.LaserEnvelope = { 'none' , 'linear+' } ;
   
   % Support check function
   supchk.ItiStimulus = fstrsup ;
@@ -658,6 +669,10 @@ function  tab = tabvalchk( tab , cstrreg )
   supchk.Target = fstrsup ;
   supchk.Contrast = fnumsup ;
   supchk.Mirror = fstrsup ;
+  supchk.Laser = fstrsup ;
+  supchk.LaserFreqHz = fnumsup ;
+  supchk.LaserMaxPowerPerChan_mW = fnumsup ;
+  supchk.LaserEnvelope = fstrsup ;
   
   % Define support error message
   superr.ItiStimulus = fstrerr( sup.ItiStimulus ) ;
@@ -666,6 +681,10 @@ function  tab = tabvalchk( tab , cstrreg )
   superr.Target = fstrerr( sup.Target ) ;
   superr.Contrast = fnumerr( sup.Contrast ) ;
   superr.Mirror = fstrerr( sup.Mirror ) ;
+  superr.Laser = fstrerr( sup.Laser ) ;
+  superr.LaserFreqHz = fnumerr( sup.LaserFreqHz ) ;
+  superr.LaserMaxPowerPerChan_mW = fnumerr( sup.LaserMaxPowerPerChan_mW ) ;
+  superr.LaserEnvelope = fstrerr( sup.LaserEnvelope ) ;
   
   % Retrieve table's name
   tabnam = tab.Properties.UserData ;
