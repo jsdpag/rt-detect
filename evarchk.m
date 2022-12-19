@@ -2,7 +2,11 @@
 function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   RfWinFactor , FixTolDeg , TrainingMode , BaselineMs , WaitAvgMs , ...
     WaitMaxProb , ReacTimeMinMs , RespWinWidMs , RewardSlope , ...
-      RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs )
+      RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs , TdtHostPC,...
+        TdtExperiment , LaserCtrl , LaserBuffer , LaserSwitch , ...
+          PowerScaleCoef , NumLaserChanOut , TdtChannels , SpikeBuffer ,...
+            MuaStartIndex , MuaBuffer , LfpStartIndex , LfpBuffer , ...
+              StimRespSim )
 % 
 % evarchk( <ARCADE editable variables> )
 % 
@@ -29,6 +33,20 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   lim.RewardFailFrac = [ 0 , 1 ] ;
   lim.ScreenGamma = [ 0 , Inf ] ;
   lim.ItiMinMs = [ 0 , Inf ] ;
+  lim.TdtHostPC = { } ;
+  lim.TdtExperiment = { } ;
+  lim.LaserCtrl = { } ;
+  lim.LaserBuffer = { } ;
+  lim.LaserSwitch = { } ;
+  lim.PowerScaleCoef = [ 0 , 100 ] ;
+  lim.NumLaserChanOut = [ 1 , Inf ] ;
+  lim.TdtChannels = [ 1 , 32 ] ;
+  lim.SpikeBuffer = { } ;
+  lim.MuaStartIndex = [ 1 , 32 ] ;
+  lim.MuaBuffer = { } ;
+  lim.LfpStartIndex = [ 1 , 32 ] ;
+  lim.LfpBuffer = { } ;
+  lim.StimRespSim = { } ;
   
   % Pack input into struct
   v.RewardMaxMs = RewardMaxMs ;
@@ -48,12 +66,35 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   v.RewardFailFrac = RewardFailFrac ;
   v.ScreenGamma = ScreenGamma ;
   v.ItiMinMs = ItiMinMs ;
+  v.TdtHostPC = TdtHostPC ;
+  v.TdtExperiment = TdtExperiment ;
+  v.LaserCtrl = LaserCtrl ;
+  v.LaserBuffer = LaserBuffer ;
+  v.LaserSwitch = LaserSwitch ;
+  v.PowerScaleCoef = PowerScaleCoef ;
+  v.NumLaserChanOut = NumLaserChanOut ;
+  v.TdtChannels = TdtChannels ;
+  v.SpikeBuffer = SpikeBuffer ;
+  v.MuaStartIndex = MuaStartIndex ;
+  v.MuaBuffer = MuaBuffer ;
+  v.LfpStartIndex = LfpStartIndex ;
+  v.LfpBuffer = LfpBuffer ;
+  v.StimRespSim = StimRespSim ;
+  
+  % These variables must be integers
+  INTARG = { 'NumLaserChanOut' , 'TdtChannels' , 'MuaStartIndex' , ...
+    'LfpStartIndex' } ;
   
   % Numeric variables
   for  N = fieldnames( v )' ; n = N{ 1 } ;
     
+    % Empty field signals that we skip checks on these vars
+    if  isempty( lim.( n ) )
+      
+      continue
+      
     % Check type. First see if variable is expected to be Text
-    if  iscellstr( lim.( n ) )
+    elseif  iscellstr( lim.( n ) )
       
       % Check that variable is string
       if  ~ ischar( v.( n ) )  ||  ~ isrow( v.( n ) )
@@ -88,6 +129,11 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
       
       error( '%s must be within inclusive range [ %.3f , %.3f ]' , ...
         n , lim.( n ) )
+      
+    % Check integer args
+    elseif  any( strcmp( n , INTARG ) )  &&  mod( v.( n ) , 1 )
+      
+      error( '%s must be an integer' , n , lim.( n ) )
       
     end % checks
     

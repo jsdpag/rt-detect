@@ -21,6 +21,16 @@ pre = getPreviousTrialData ;
 % Gain access to block selection function's global variable
 global  ARCADE_BLOCK_SELECTION_GLOBAL ;
 
+% Error check editable variables
+v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
+  FixTolDeg , TrainingMode , BaselineMs , WaitAvgMs , WaitMaxProb , ...
+    ReacTimeMinMs , RespWinWidMs , RewardSlope , RewardMinMs , ...
+      RewardFailFrac , ScreenGamma , ItiMinMs , TdtHostPC , ...
+        TdtExperiment , LaserCtrl , LaserBuffer , LaserSwitch , ...
+          PowerScaleCoef , NumLaserChanOut , TdtChannels , SpikeBuffer ,...
+            MuaStartIndex , MuaBuffer , LfpStartIndex , LfpBuffer , ...
+              StimRespSim ) ;
+
 
 %%% FIRST TRIAL INITIALISATION -- PERSISTENT DATA %%%
 
@@ -69,6 +79,9 @@ if  TrialData.currentTrial == 1
   % Calculate pixels per degree of visual field. cm/deg * pix/cm = pix/deg.
   P.pixperdeg = ( cfg.DistanceToScreen * tand( 1 ) )  *  ...
     ( sqrt( sum( P.screensize .^ 2 ) ) / cfg.MonitorDiagonalSize ) ;
+  
+    % Rectify this wrong
+    cfg.PixelsPerDegree = P.pixperdeg ;
   
   % Screen size in degrees
   P.screendegs = P.screensize ./ P.pixperdeg ;
@@ -136,7 +149,135 @@ if  TrialData.currentTrial == 1
     P.ITIstart.value = zeros( 1 , 'uint64' ) ;
   
   % Create and initialise behaviour plots
-  P.ofig = creatbehavfig( cfg , P.err , P.tab ) ;
+  P.bfig = creatbehavfig( cfg , P.err , P.tab ) ;
+
+  % Initialise connection to Synapse server on TDT HostPC
+  P.syn = initsynapse( cfg , P.tab , P.evm , P.err , TdtHostPC , ...
+    TdtExperiment , LaserCtrl , LaserBuffer , LaserSwitch , SpikeBuffer,...
+      MuaBuffer , LfpBuffer , StimRespSim ) ;
+
+    % Create a logical flag that is raised when synapse is in use
+    P.UsingSynapse = ~ isempty( P.syn ) ;
+    
+  % Set up SynapseAPI environment if available
+  if  P.UsingSynapse
+    
+    % Load up inverse laser transfer functions
+    P.invtrans = getlasercoefs( cfg , 'laser_coefs' ) ;
+    
+    % Create a LaserController MATLAB object for setting parameter values
+    % of the named LaserController Gizmo
+    P.laserctrl = LaserController( P.syn , LaserCtrl ) ;
+
+      % Set fixed parameters for remainder of bar mapping session
+      P.laserctrl.EventIntOn = P.evm.TargetOn_entry ;
+      P.laserctrl.EventIntReset = P.evm.cleanUp_entry ;
+      P.laserctrl.EventIntRstOpt = P.evm.Saccade_entry ;
+      P.laserctrl.UseLaser = false ;
+      P.laserctrl.UsePhotodiode = false ;
+      P.laserctrl.PhotodiodeThreshold = 0.67 ;
+      P.laserctrl.PhotodiodeDirectionStr = 'falling' ;
+      P.laserctrl.PhotodiodeTimeLow = 4 ;
+      P.laserctrl.Enablemanual = false ;
+
+    % Create LaserSignalBuffer MATLAB object for setting parameter values
+    % of the named LaserSignalBuffer. Critically, this object loads the
+    % laser's voltage input signal into a TDT memory buffer, for triggered
+    % playback.
+    P.laserbuff = LaserSignalBuffer( P.syn , LaserBuffer ) ;
+    
+      % Attempt to use 1000Hz output sampling rate
+      P.laserbuff.FsTarget = 1e3 ;
+    
+    % MUA and LFP signals are in the different buffer Gizmos
+    P.buf.difmualfp = ~ strcmp( MuaBuffer , LfpBuffer ) ;
+    
+    % Create triggered buffer MATLAB objects
+    P.buf.spk = TdtWinBuf( P.syn , SpikeBuffer ) ;
+    P.buf.mua = TdtWinBuf( P.syn ,   MuaBuffer ) ;
+    if  P.buf.difmualfp , P.buf.lfp = TdtWinBuf( P.syn , LfpBuffer ) ;
+    else                , P.bug.lfp = P.buf.mua ;
+    end
+    
+      %- Set fixed buffer parameters -%
+
+      % We add this many milliseconds to the start and end of the buffers,
+      % to make sure that we grab the data that we want
+      P.extratime = 25 ;
+      
+      % Buffer size grabs a 500ms baseline window that ends the moment the
+      % laser is triggered. Then adds a window following the onset of the
+      % laser signal that ends at the same time point as the response
+      % window i.e. the latest allowable saccade onset time.
+      secs = ( BaselineMs  +  ReacTimeMinMs  +  RespWinWidMs  +  ...
+        2 * P.extratime ) / 1e3 ;
+
+      % For spike buffer, assume no unit will generate above 1000spk/sec.
+      P.buf.spk.setbufsiz( secs , 1000 ) ;
+      P.buf.mua.setbufsiz( secs ) ;
+      if  P.buf.difmualfp , P.buf.lfp.setbufsiz( secs ) ; end
+
+      % Response window contains only time of laser onset to last allowable
+      % reaction time i.e. saccade onset
+      secs = ( ReacTimeMinMs  +  RespWinWidMs  +  P.extratime ) / 1e3 ;
+
+      % Again, assume no spike rate above 1000spk/sec
+      P.buf.spk.setrespwin( secs , 1000 ) ;
+      P.buf.mua.setrespwin( secs ) ;
+      if  P.buf.difmualfp , P.buf.lfp.setrespwin( secs ) ; end
+      
+      % Maximum number of channels to return following each buffer read
+      P.buf.spk.setchsubsel( TdtChannels ) ;
+      
+        % Number of channels to return from MUA/LFP buffer(s). This changes
+        % depending on whether both data types have the same buffer or not.
+        tdtchan = ...
+          max( [ MuaStartIndex , LfpStartIndex ]  +  TdtChannels  -  1 ) ;
+      
+        % Always assign to MUA buffer, conditionally to LFP buffer
+        P.buf.mua.setchsubsel( tdtchan ) ;
+        if  P.buf.difmualfp , P.buf.lfp.setchsubsel( tdtchan ) ; end
+
+      % Crop buffered data in specified time window around trigger event.
+      % Include a few extra milliseconds so that MUA interpolation by
+      % onlinefigure does not return NaN.
+      secs = [ -BaselineMs - P.extratime , ...
+               +ReacTimeMinMs + RespWinWidMs + P.extratime ] / 1e3 ;
+      P.buf.spk.settimewin( secs ) ;
+      P.buf.mua.settimewin( secs ) ;
+      if  P.buf.difmualfp , P.buf.lfp.settimewin( secs ) ; end
+
+    % Simulated ephys signal modulation via FB128 Sync line is enabled
+    P.simresp = ~ strcmpi( StimRespSim , 'none' ) ;
+
+      % Set up StimRespSim Gizmo
+      if  P.simresp
+
+        % Try to enable the FB128 sync line
+        iset( P.syn , StimRespSim , 'Enable' , 1 )
+
+        % Default increased response to full duration of laser signal
+        iset( P.syn , StimRespSim , ...
+           'LatencyMs' , 0 )
+        iset( P.syn , StimRespSim , ...
+          'ResponseMs' , ReacTimeMinMs + RespWinWidMs )
+
+      else
+
+        % Try to disable the FB128 sync line
+        iset( P.syn , StimRespSim , 'Enable' , 0 )
+
+      end % set StimRespSim Giz
+
+    % Create and initialise electrophysiology plots
+    P.efig = createphysfig( cfg , v , P.invtrans , P.tab ) ;
+  
+  % Not using SynapseAPI, set default values
+  else
+    
+    P.simresp = false ;
+    
+  end % synapse api actions
   
 % All subsequent trials
 else
@@ -150,7 +291,7 @@ else
     newdata = struct( 'pre_err', pre.trialError( end - 1 ), ...
       'pre_block', pre.blocks( end - 1 ), 'nex_block', pre.blocks( end ) );
     
-    P.ofig.update( 'BehavRaster' , [ ] , newdata )
+    P.bfig.update( 'BehavRaster' , [ ] , newdata )
     
     %- Trial info panel -%
     newdata = struct( 'ind' , TrialData.currentTrial - [ 1 , 0 ] , ...
@@ -163,7 +304,7 @@ else
       'trials' , ARCADE_BLOCK_SELECTION_GLOBAL.count.trials , ...
       'total' , ARCADE_BLOCK_SELECTION_GLOBAL.count.total ) ;
     
-    P.ofig.update( 'TrialInfo' , [ ] , newdata )
+    P.bfig.update( 'TrialInfo' , [ ] , newdata )
     
     %- Psychometric and reaction time curves -%
     for  F = { 'Psychometric' , 'Reaction Time' } , f = F{ 1 } ;
@@ -179,8 +320,8 @@ else
       newdata = pre.reactionTime( end - 1 ) ;
       
       % Update empirical data and find least-squares best fit
-      P.ofig.update( id , index , newdata )
-      P.ofig.fit( id )
+      P.bfig.update( id , index , newdata )
+      P.bfig.fit( id )
       
     end % psych & RT curves
     
@@ -192,15 +333,24 @@ else
     % Update histogram
     index = pre.reactionTime( end - 1 ) ;
     newdata = pre.trialError( end - 1 ) ;
-    P.ofig.update( id , index , newdata )
+    P.bfig.update( id , index , newdata )
     
     % Select groups for new block %
     if  diff( pre.blocks( end - [ 1 , 0 ] ) )
       id = sprintf( 'Block %d' , ARCADE_BLOCK_SELECTION_GLOBAL.typ ) ;
-      P.ofig.select( 'set' , id )
+      P.bfig.select( 'set' , id )
     end
     
-end % first trial init
+  % Using synapse and trial was correct or failed so update ephys plots
+  if  P.UsingSynapse  &&  ...
+      any( pre.trialError( end - 1 ) == [ P.err.Correct , P.err.Failed ] )
+    
+    % Update plots
+    P.efig
+    
+  end % update ephys plot
+    
+end % trial init
 
 %- Show changes to plots -%
 drawnow
@@ -208,11 +358,9 @@ drawnow
 
 %%% Trial variables %%%
 
-% Error check editable variables
-v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
-  FixTolDeg , TrainingMode , BaselineMs , WaitAvgMs , WaitMaxProb , ...
-    ReacTimeMinMs , RespWinWidMs , RewardSlope , RewardMinMs , ...
-      RewardFailFrac , ScreenGamma , ItiMinMs ) ;
+% Properties of current trial condition. Used in 'Stimulus configuration'.
+c = table2struct(  ...
+      P.tab( TrialData.currentCondition == P.tab.Condition , : )  ) ;
 
 % Record pixels per degree, computed locally
 v.pixperdeg = P.pixperdeg ;
@@ -308,10 +456,6 @@ if  ~ all(  cellfun( @( f ) v.( f ) == P.EyeTrack.( f ) , ...
 
 end % update eye windows
 
-% Properties of current trial condition. Used in 'Stimulus configuration'.
-c = table2struct(  ...
-      P.tab( TrialData.currentCondition == P.tab.Condition , : )  ) ;
-
 % Evaluate target mirroring. If mirror is on then the target is reflected
 % across the fixation point. Make sure that the correct eye window is used
 % to evaluate behaviour.
@@ -322,7 +466,7 @@ switch  c.Mirror
 end
 
 
-%%% Stimulus configuration %%%
+%%% Visual stimulation parameters %%%
 
 % Reset flicker colour
 P.Flicker.stim.faceColor( : ) = double( intmax( 'uint8' ) ) ;
@@ -434,6 +578,91 @@ switch  c.ItiStimulus
 end
 
 
+%%% Laser stimulation parameters %%%
+
+% We are connected to TDT Synapse and a laser is required on next trial
+if  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
+  
+  % Laser name for next trial condition
+  lnam = c.Laser ;
+  
+  % Gen inverse transfer function
+  itran = P.invtrans.( lnam ) ;
+  
+  % Compute max power that rides on top of emission baseline. This is the
+  % total power required from the laser to power all laser output channels.
+  maxpow = c.LaserMaxPowerPerChan_mW * PowerScaleCoef * NumLaserChanOut ;
+  
+  % Cap at maximum measured power output
+  maxpow = min( maxpow , itran.max_power_mW ) ;
+  
+  % Subtract emission baseline
+  maxpow = maxpow - itran.min_power_mW ;
+  
+  % Number of complete voltage output samples by end of max response window
+  N = ...
+    floor( P.laserbuff.FsSignal * ( ReacTimeMinMs + RespWinWidMs ) / 1e3 );
+  
+  % Laser frequency is zero means constant value, return ones for scaling
+  if  c.LaserFreqHz == 0
+    
+    X = ones( 1 , N ) ;
+    
+  % Non-zero frequency, make sine wave peaking at [0,1] for scaling
+  else
+    
+    % Time vector spanning laser signal
+    X = ( 1 : N ) .* P.laserbuff.FsSignal ;
+    
+    % Convert phase from degrees to radians
+    phi = pi / 180 * c.LaserPhaseDeg ;
+    
+    % Sine wave
+    X = sin( 2 * pi * c.LaserFreqHz .* X  +  phi ) / 2  +  0.5 ;
+    
+  end % scalable laser signal
+  
+  % Apply envelope
+  switch  c.LaserEnvelope
+    
+    % No envelope, no action
+    case  'none'
+      
+    % Increasing linear envelope
+    case  'linear+' , X = ( 1 : N ) ./ N  .*  X ;
+      
+    % We should not ever get here
+    otherwise , error( 'LaserEnvelope programming error.' )
+      
+  end % envelope
+  
+  % Scale and shift the signal to occupy the entire dynamic range of the
+  % laser from baseline emission to maximum set output power
+  X = maxpow .* X  +  itran.min_power_mW ;
+  
+  % LaserSwitch Gizmo channels the control voltage to the correct laser
+  iset( P.syn , LaserSwitch , 'Laser' , itran.index )
+  
+  % Inverse transfer function converts the power output that we want into
+  % the voltage that we need to produce the desired output. Loaded into the
+  % LaserSignalBuffer Gizmo for triggered playback.
+  P.laserbuff.Signal = ppval( itran.piecewise_polynomial , X ) ;
+  
+% We are connected to TDT Synapse and no laser is needed on next trial
+elseif  P.UsingSynapse  &&  strcmp( c.Laser , 'none' )
+  
+  % Make sure that laser is disabled
+  P.laserctrl.UseLaser = false ;
+  P.laserbuff.Signal   =     0 ;
+  
+% We should never get here
+else
+  
+  error( 'Programming error!!!' )
+  
+end % laser param
+
+
 %%% DEFINE TASK STATES %%%
 
 % Special actions executed when state is finished executing. Remember to
@@ -458,6 +687,15 @@ end
   ENDACT.cleanUp = ...
     { @( ) P.ITIstart.set_value( tic ) ;
       @( ) EchoServer.Write( 'End trial %d\n' , TrialData.currentTrial ) };
+  
+  % SynapseAPI is live, send run-time note about end of trial
+  if  P.UsingSynapse
+    ENDACT.Correct{ end + 1 } = @( ) iset(  P.syn , 'RecordingNotes' , ...
+      'Note' , sprintf( 'RT %dms' , ...
+        ceil( P.bhv.reactionTime( P.bhv.currentTrial ) ) )  ) ;
+    ENDACT.cleanUp{ end + 1 } = @( ) iset( P.syn , 'RecordingNotes' , ...
+      'Note' , sprintf( 'End trial %d\n' , TrialData.currentTrial ) ) ;
+  end
 
 % Special constants for value of max reps
 MAXREP_DEFAULT = 2 ;
@@ -544,6 +782,12 @@ for  row = 1 : size( STATE_TABLE , 1 )
   % onEntry input arg struct
   a = onEntry_args( entarg{ : } ) ;
   
+  % Default value, no SynapseAPI object is available
+  a.synflg = P.UsingSynapse ;
+  
+  % SynapseAPI is not empty, so add pointer to this in the arg struct
+  if  P.UsingSynapse , a.syn = P.syn ; end
+  
   % Define state's onEntry actions
   states.( name ).onEntry = { @( ) onEntry_generic( a ) } ;
   
@@ -616,7 +860,7 @@ function  tab = tabvalchk( tab , cstrreg )
   % Required columns, the set of column headers
   colnam = { 'ItiStimulus' , 'WaitBackground' , 'BackgroundFlickerHz' , ...
     'Target' , 'Contrast' , 'Mirror' , 'Laser' , 'LaserFreqHz' , ...
-      'LaserMaxPowerPerChan_mW' , 'LaserEnvelope' } ;
+      'LaserPhaseDeg' , 'LaserMaxPowerPerChan_mW' , 'LaserEnvelope' } ;
   
   % Numerical type check
   fnumchk = @( c ) isnumeric( c ) && isreal( c ) && all( isfinite( c ) ) ;
@@ -646,6 +890,7 @@ function  tab = tabvalchk( tab , cstrreg )
   valid.Mirror = @iscellstr ;
   valid.Laser = @iscellstr ;
   valid.LaserFreqHz = fnumchk ;
+  valid.LaserPhaseDeg = fnumchk ;
   valid.LaserMaxPowerPerChan_mW = fnumchk ;
   valid.LaserEnvelope = @iscellstr ;
   
@@ -658,6 +903,7 @@ function  tab = tabvalchk( tab , cstrreg )
   sup.Mirror = { 'off' , 'on' } ;
   sup.Laser = { 'none' , 'test' , 'control' } ;
   sup.LaserFreqHz = [ 0 , 200 ] ;
+  sup.LaserPhaseDeg = [ -Inf , +Inf ] ;
   sup.LaserMaxPowerPerChan_mW = [ 0 , 20 ] ;
   sup.LaserEnvelope = { 'none' , 'linear+' } ;
   
@@ -671,6 +917,7 @@ function  tab = tabvalchk( tab , cstrreg )
   supchk.Mirror = fstrsup ;
   supchk.Laser = fstrsup ;
   supchk.LaserFreqHz = fnumsup ;
+  supchk.LaserPhaseDeg = fnumsup ;
   supchk.LaserMaxPowerPerChan_mW = fnumsup ;
   supchk.LaserEnvelope = fstrsup ;
   
@@ -683,6 +930,7 @@ function  tab = tabvalchk( tab , cstrreg )
   superr.Mirror = fstrerr( sup.Mirror ) ;
   superr.Laser = fstrerr( sup.Laser ) ;
   superr.LaserFreqHz = fnumerr( sup.LaserFreqHz ) ;
+  superr.LaserPhaseDeg = fnumerr( sup.LaserPhaseDeg ) ;
   superr.LaserMaxPowerPerChan_mW = fnumerr( sup.LaserMaxPowerPerChan_mW ) ;
   superr.LaserEnvelope = fstrerr( sup.LaserEnvelope ) ;
   
@@ -729,6 +977,65 @@ function  tab = tabvalchk( tab , cstrreg )
     
   end % cols
 end % tabvalchk
+
+
+% Load up laser inverse Voltage/mW-power transfer function, measured and
+% saved by makelasertable. Takes session's ArcadeConfig object for paths.
+% Also needs the name of .mat file from makelasertable that contains the
+% inverse transfer function in piecewise polynomial struct from spline( );
+% this is assumed to be one of the user added files that are backed up by
+% the ARCADE session.
+function  lasers = getlasercoefs( cfg , coefs )
+  
+  %-- Constants --%
+  
+  % Essential field names
+  F = { 'wlen' , 'name' , 'ipos' , 'pp' , 'pmin' , 'pmax' } ;
+  
+  % Laser name set
+  L = { 'test' , 'control' } ;
+  
+    % String version
+    LSTR = [ '''' , strjoin( L , ''' , ''' ) , '''' ] ;
+  
+  
+  %-- Load/check data --%
+
+  % Name of the .mat coefficient file
+  fnam = fullfile( cfg.filepaths.Backup , coefs ) ;
+  
+  % Load this into a struct
+  c = load( fnam ) ;
+  
+  % Check for missing fields
+  m = ~ isfield( c , F ) ;
+  
+    if  any( m )
+      error( '%s missing variables: %s', fnam, strjoin( F( m ) , ' , ' ) )
+    end
+  
+  % Number of lasers
+  N = numel( c.ipos ) ;
+  
+  % Check for unique and valid names
+  if  numel(  unique( c.name )  ) ~= N  ||  ...
+        any(  ~ ismember( c.name , L )  )
+    error( 'Var ''name'' in %s must be unique from set: %s' , LSTR )
+  end
+  
+  % Lasers
+  for  i = 1 : numel( c.ipos ) , nam = c.name{ i } ;
+    
+    % Add field to output struct with essential info. about this laser
+    lasers.( nam ).index                = c.ipos( i ) ;
+    lasers.( nam ).wavelength           = c.wlen( i ) ;
+    lasers.( nam ).min_power_mW         = c.pmin( i ) ;
+    lasers.( nam ).max_power_mW         = c.pmax( i ) ;
+    lasers.( nam ).piecewise_polynomial = c.pp  ( i ) ;
+    
+  end % lasers
+  
+end % getlasercoefs
 
 
 % Convert Weber contrast value c to RGB I relative to background RGB Ib.
@@ -815,4 +1122,20 @@ function  [ v , RfXDeg , RfYDeg , RfRadDeg ] = newtarget( P , v )
   end % editable variables
   
 end % newtarget
+
+
+% Try to send information from SynapseAPI object. Raise error on failure.
+% Scalar parameters, only.
+function  iset( syn , giz , par , val )
+  
+  % Try to set value of Gizmo parameter
+  if  ~ syn.setParameterValue( giz , par , val )
+    
+    % Throw a simple, reader-friendly error message.
+    error( [ 'Failed to set parameter %s of Gizmo %s through ' , ...
+      'Synapse server on Host: %s' ] , par , giz , syn.SERVER )
+    
+  end % failed to set
+  
+end % iset
 
