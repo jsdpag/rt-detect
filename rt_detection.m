@@ -583,11 +583,8 @@ end
 % We are connected to TDT Synapse and a laser is required on next trial
 if  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
   
-  % Laser name for next trial condition
-  lnam = c.Laser ;
-  
-  % Gen inverse transfer function
-  itran = P.invtrans.( lnam ) ;
+  % Gen inverse transfer function for laser in next trial condition
+  itran = P.invtrans.( c.Laser ) ;
   
   % Compute max power that rides on top of emission baseline. This is the
   % total power required from the laser to power all laser output channels.
@@ -821,12 +818,44 @@ storeUserVariables( v )
 states = struct2cell( states ) ;
 createTrial( 'Start' , states{ : } )
 
+% Laser is in use
+if  P.UsingSynapse
+  
+  % Format laser string
+  lstr = sprintf( [ '%9sLaser %s\n%9sFreqHz %d\n%9sPhaseDeg %d\n' , ...
+    '%9sEnvelope %s\n' ] , '' , c.Laser , '' , c.LaserFreqHz , '' , ...
+      c.LaserPhaseDeg , '' , c.LaserEnvelope ) ;
+    
+  % Trial header
+  hdr = sprintf( [ 'Start trial %d\nCondition %d\nBlock %d\n' , ...
+    'Block type %d\nMotion direction deg %d\nReward ms %d' ] , ...
+      TrialData.currentTrial , TrialData.currentCondition , ...
+        TrialData.currentBlock , v.BlockType , c.DirectionDeg , rew ) ;
+
+  % Send header to Synapse server
+  if  ~ P.syn.setParameterValue( 'RecordingNotes' , 'Note' , hdr )
+    error( 'Failed to send trial header to Synapse.' )
+  end
+  
+  % Resume cyclical buffering of ephys signals
+  P.buf.spk.startbuff( ) ; P.buf.mua.startbuff( ) ;
+
+% No laser
+else
+  
+  % Default laser string
+  lstr = sprintf( ...
+    '%9sLaser none\n%9sFreqHz 0\n%9sPhaseDeg 0\n%9sEnvelope none\n' , ...
+      '' , '' , '' , '' ) ;
+  
+end % laser
+
 % Output to message log
 EchoServer.Write( [ '\n%s Start trial %d, cond %d, block %d(%d)\n' , ...
-  '%9sWait %dms = %d + %d\n' ] , datestr( now , 'HH:MM:SS' ) , ...
+  '%9sWait %dms = %d + %d\n%s' ] , datestr( now , 'HH:MM:SS' ) , ...
     TrialData.currentTrial , TrialData.currentCondition , ...
       TrialData.currentBlock , v.BlockType , '' , ceil( WaitMs ) , ...
-        ceil( BaselineMs ) , ceil( v.WaitMs ) )
+        ceil( BaselineMs ) , ceil( v.WaitMs ) , lstr )
 
 
 %%% Complete previous trial's inter-trial-interval %%%
