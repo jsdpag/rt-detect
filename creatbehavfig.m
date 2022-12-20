@@ -1,18 +1,47 @@
 
-function  ofig = creatbehavfig( cfg , err , tab )
+function  ofig = creatbehavfig( cfg , err , tab , xaxcol , weibull )
 % 
-% ofig = creatbehavfig( cfg , err , tab )
+% ofig = creatbehavfig( cfg , err , tab , xaxcol , weibull )
 % 
 % Create and initialise behaviour plots. Called by task script. cfg is the
 % ArcadeConfig object of the current session. err is the struct output from
 % gettrialerrors mapping the name of each trial outcome to its numeric
 % code. tab is a Table object containing processed version of
 % trial_condition_table.csv, which defines all trial conditions and groups
-% them into blocks of trials. Returns an onlinefigure object. Create plots
+% them into blocks of trials. xaxcol names what column of tab is used for
+% the x-axis of the %-correct and Avgerage-RT plots. weibull is scalar
+% logical controlling whether Weibull curve is fitted to %-correct & Avg.RT
+% (true) or not (false). Returns an onlinefigure object. Create plots
 % before running the first trial.
 % 
   
   
+  %%% CONSTANTS %%%
+  
+  % arrayfun & cellfun that always returns results in a cell array
+  arfc = @( varargin ) arrayfun( varargin{ : } , 'UniformOutput' , false );
+  crfc = @( varargin )  cellfun( varargin{ : } , 'UniformOutput' , false );
+  
+  % %-correct & Avg.RT x-axis labels
+  XLAB.Contrast = 'Target Contrast' ;
+  XLAB.LaserFreqHz = 'Laser Frequency (Hz)' ;
+  XLAB.LaserPhaseDeg = 'Laser Phase (Deg)' ;
+  XLAB.LaserMaxPowerPerChan_mW = 'Laser Power (mW/chan)' ;
+  
+  % %-correct & Avg.RT x-axis scaling
+  XSCALE.Contrast = 'linear' ;
+  XSCALE.LaserFreqHz = 'log' ;
+  XSCALE.LaserPhaseDeg = 'linear' ;
+  XSCALE.LaserMaxPowerPerChan_mW = 'linear' ;
+  
+  
+  %%% Guarantee no Weibull fits for certain parameters %%%
+  
+  if  any( strcmp( xaxcol , { 'LaserFreqHz' , 'LaserPhaseDeg' } ) )
+    weibull = false ;
+  end
+  
+
   %%% Blocks of trials %%%
   
   % Unique BlockType values. Here 'Block Type' means a unique grouping of
@@ -22,16 +51,14 @@ function  ofig = creatbehavfig( cfg , err , tab )
   % Number of block types
   blk.N = numel( blk.typ ) ;
   
-  % Find corresponding sets of target contrasts. This will be the
-  % independent variable in the psychometric and RT plots. Return as cell
-  % array of vectors.
-  blk.x = ...
-    arrayfun( @( t ) unique( tab.Contrast( tab.BlockType == t ) )' , ...
-      blk.typ , 'UniformOutput' , false ) ;
+  % Find corresponding sets of x-axis values. This will be the independent
+  % variable in the psychometric and RT plots. Return as cell array of
+  % vectors.
+  blk.x = arfc( @( t ) unique( tab.( xaxcol )( tab.BlockType == t ) )' ,...
+    blk.typ ) ;
   
   % Create name for each block
-  blk.nam = arrayfun( @( t ) sprintf( 'Block %d' , t ) , blk.typ , ...
-    'UniformOutput' , false ) ;
+  blk.nam = arfc( @( t ) sprintf( 'Block %d' , t ) , blk.typ ) ;
   
   % Concatenate x values
   x = [ blk.x{ : } ] ;
@@ -206,7 +233,7 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
     YLIM = { [ 0 , 100 ] , [ ] } ;
   
     % X- and Y-Axis labels
-    XLAB = { 'Target contrast' , [ ] } ;
+    XLAB = { XLAB.( xaxcol ) , [ ] } ;
     YLAB = { 'Correct trials (%)' , 'Reaction time (ms)' } ;
     
     % Function handles
@@ -216,6 +243,13 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
   % Collect relevant trial error codes for group data
   dat.Correct = err.Correct ;
   dat.Failed  = err.Failed  ;
+  
+  % Map colours to target and laser types from table 'Target' and 'Laser'
+  col.Target.none     = col.blue  / 2 ;
+  col.Target.gaussian = col.green / 2 ;
+   col.Laser.none     = col.blue   ;
+   col.Laser.test     = col.green  ;
+   col.Laser.control  = col.yellow ;
   
   % Selection and un-selection parameters for the error bars and scatter
   % objects that show the empirical data.
@@ -253,54 +287,82 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
     % Labels
     if  ~ isempty( XLAB{ dattyp } ) , xlabel( ax , XLAB{ dattyp } ) , end
     ylabel( ax , YLAB{ dattyp } )
+    
+    % X-axis scale
+    ax.XScale = XSCALE.( xaxcol ) ;
 
     % Blocks of trials
     for  i = 1 : blk.N
       
-      % Get group and set identifier strings (id & nam)
+      % Get block i.e. set identifier string
       nam = blk.nam{ i } ;
-      id = [ TAGS{ dattyp } , ' ' , nam ] ;
-
-      % The set of independent variable test values, and NaN vector with the
-      % same size
+      
+      % The set of independent variable test values, and NaN vector with
+      % the same size
       x = blk.x{ i } ;
       y = nan( size( x ) ) ;
-
-      % Data will be a Welford array, for accumulating an estimate of
-      % variance
-      dat.w = Welford( size( x ) ) ;
-
-      % Create empirical data graphics objects
-      h = [ errorbar( ax , x , y , y , 'LineStyle' , 'none' , ...
-              'Marker' , 'none' , 'Tag' , 'error' ) , ...
-            scatter( ax , x , y , 'Tag' , 'data' ) ] ;
-
-      % Add graphics object group and bind parameters
-      ofig.addgroup ( id , nam , dat , h , FUPDATE{ dattyp } )
-      ofig.bindparam( id ,   'seldata' , selpar{ : } )
-      ofig.bindparam( id , 'unseldata' , unspar{ : } )
       
-      % Too few points to fit curves, skip to next block
-      if  numel( x ) < 5 , continue , end
+      % Find rows for this type of block
+      r = tab.BlockType == blk.typ( i ) ;
+      
+      % Combine visual target and laser type in each row of table
+      TL = crfc( @( T , L ) sprintf( '%s\n%s' , T , L ) , ...
+        tab.Target( r ) , tab.Laser( r ) )' ;
+      
+      % Keep only unique combinations of target/laser types
+      TL = unique( TL ) ;
+      
+      % Target/laser combinations, 
+      for  TL = TL
+        
+        % Get target and laser type strings
+        tl = strsplit( TL{ 1 } , '\n' ) ;
+        [ target , laser ] = tl{ : } ;
 
-      % Make curve fitting graphics objects
-      h = [ plot( ax , nan( 2 , 2 ) , nan( 2 , 2 ) , 'k--' ) ; 
-            text( ax , nan( 1 , 2 ) , nan( 1 , 2 ) , { '' , '' } , ...
-              'FontName' , 'Arial' , 'VerticalAlignment' , 'bottom' , ...
-                'Clipping' , 'on' ) ]' ;
+        % Make group identifier string
+        id = [ TAGS{ dattyp } , ' ' , nam , ' ' , target , ' ' , laser ] ;
 
-      % Tag them
-      h( 1 ).Tag = 'xthreshold' ;  h( 3 ).Tag = 'xthlabel' ;
-      h( 2 ).Tag = 'ythreshold' ;  h( 4 ).Tag = 'ythlabel' ;
+        % Data will be a Welford array, for accumulating an estimate of
+        % variance
+        dat.w = Welford( size( x ) ) ;
 
-      % Create fitted function line
-      h = [ h , plot( ax , xfit , yfit , 'Tag' , 'curve' ) ] ;
+        % Create empirical data graphics objects
+        h = [ errorbar( ax , x , y , y , 'LineStyle' , 'none' , ...
+                'Marker' , 'none' , 'Tag' , 'error' ) , ...
+              scatter( ax , x , y , 'Tag' , 'data' ) ] ;
+        
+        % Set selection colours
+        selpar{ 1 }{ 2 } = col.Target.( target ) ;
+        selpar{ 2 }{ 2 } = col.Target.( target ) ;
+        selpar{ 2 }{ 4 } =  col.Laser.( laser  ) ;
 
-      % Bind fitted function to data, and selection params to fit objects
-      ofig.bindfit( id , h , FFIT{ dattyp } )
-      ofig.bindparam( id ,   'selfit' , selparfit{ : } )
-      ofig.bindparam( id , 'unselfit' , unsparfit{ : } )
+        % Add graphics object group and bind parameters
+        ofig.addgroup ( id , nam , dat , h , FUPDATE{ dattyp } )
+        ofig.bindparam( id ,   'seldata' , selpar{ : } )
+        ofig.bindparam( id , 'unseldata' , unspar{ : } )
 
+        % Too few points to fit curves, skip to next block
+        if  ~ weibull || numel( x ) < 5 , continue , end
+
+        % Make curve fitting graphics objects
+        h = [ plot( ax , nan( 2 , 2 ) , nan( 2 , 2 ) , 'k--' ) ; 
+              text( ax , nan( 1 , 2 ) , nan( 1 , 2 ) , { '' , '' } , ...
+                'FontName' , 'Arial' , 'VerticalAlignment' , 'bottom' , ...
+                  'Clipping' , 'on' ) ]' ;
+
+        % Tag them
+        h( 1 ).Tag = 'xthreshold' ;  h( 3 ).Tag = 'xthlabel' ;
+        h( 2 ).Tag = 'ythreshold' ;  h( 4 ).Tag = 'ythlabel' ;
+
+        % Create fitted function line
+        h = [ h , plot( ax , xfit , yfit , 'Tag' , 'curve' ) ] ;
+
+        % Bind fitted function to data, and selection params to fit objects
+        ofig.bindfit( id , h , FFIT{ dattyp } )
+        ofig.bindparam( id ,   'selfit' , selparfit{ : } )
+        ofig.bindparam( id , 'unselfit' , unsparfit{ : } )
+        
+      end % target/laser combos
     end % blocks
   end % data types
   

@@ -23,17 +23,22 @@ global  ARCADE_BLOCK_SELECTION_GLOBAL ;
 
 % Error check editable variables
 v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
-  FixTolDeg , TrainingMode , BaselineMs , WaitAvgMs , WaitMaxProb , ...
-    ReacTimeMinMs , RespWinWidMs , RewardSlope , RewardMinMs , ...
-      RewardFailFrac , ScreenGamma , ItiMinMs , TdtHostPC , ...
-        TdtExperiment , LaserCtrl , LaserBuffer , LaserSwitch , ...
-          PowerScaleCoef , NumLaserChanOut , TdtChannels , SpikeBuffer ,...
-            MuaStartIndex , MuaBuffer , LfpStartIndex , LfpBuffer , ...
-              StimRespSim ) ;
+  RfTargetFactor , FixTolDeg , TrainingMode , BaselineMs , WaitAvgMs , ...
+    WaitMaxProb , ReacTimeMinMs , RespWinWidMs , RewardSlope , ...
+      RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs , ...
+        BehaviourXaxis , TdtHostPC , TdtExperiment , LaserCtrl , ...
+          LaserBuffer , LaserSwitch , PowerScaleCoef , NumLaserChanOut ,...
+            TdtChannels , SpikeBuffer , MuaStartIndex , MuaBuffer , ...
+              LfpStartIndex , LfpBuffer , StimRespSim ) ;
+
+% Properties of current trial condition. Used in 'Stimulus configuration'.
+c = table2struct(  P.tab( TrialData.currentCondition == ...
+  ARCADE_BLOCK_SELECTION_GLOBAL.tab.Condition , : )  ) ;
 
 
-%%% FIRST TRIAL INITIALISATION -- PERSISTENT DATA %%%
+%%% TRIAL INITIALISATION -- PERSISTENT DATA %%%
 
+% First trial of session
 if  TrialData.currentTrial == 1
   
   % Store local pointer to table defining blocks of trials
@@ -149,7 +154,7 @@ if  TrialData.currentTrial == 1
     P.ITIstart.value = zeros( 1 , 'uint64' ) ;
   
   % Create and initialise behaviour plots
-  P.bfig = creatbehavfig( cfg , P.err , P.tab ) ;
+  P.bfig = creatbehavfig( cfg , P.err , P.tab , BehaviourXaxis , false ) ;
 
   % Initialise connection to Synapse server on TDT HostPC
   P.syn = initsynapse( cfg , P.tab , P.evm , P.err , TdtHostPC , ...
@@ -310,8 +315,8 @@ else
     for  F = { 'Psychometric' , 'Reaction Time' } , f = F{ 1 } ;
       
       % Construct graphics object group identifier
-      id = sprintf( '%s Block %d' , ...
-        f , pre.userVariable{ end - 1 }.BlockType ) ;
+      id = sprintf( '%s Block %d %s %s' , ...
+        f , pre.userVariable{ end - 1 }.BlockType , c.Target , c.Laser ) ;
       
       % Information required to update plots
       index = struct( 'x' , ...
@@ -342,8 +347,12 @@ else
     end
     
   % Using synapse and trial was correct or failed so update ephys plots
-  if  P.UsingSynapse  &&  ...
-      any( pre.trialError( end - 1 ) == [ P.err.Correct , P.err.Failed ] )
+  if  P.UsingSynapse && ( pre.trialError( end - 1 ) == P.err.Correct || ...
+                          pre.trialError( end - 1 ) == P.err.Failed )
+    
+    % Retrieve buffered data
+    P.buf.spk.getdata( ) ; P.buf.mua.getdata( ) ;
+    if  P.buf.difmualfp , P.buf.lfp.getdata( ) ; end
     
     % Update plots
     P.efig
@@ -357,10 +366,6 @@ drawnow
 
 
 %%% Trial variables %%%
-
-% Properties of current trial condition. Used in 'Stimulus configuration'.
-c = table2struct(  ...
-      P.tab( TrialData.currentCondition == P.tab.Condition , : )  ) ;
 
 % Record pixels per degree, computed locally
 v.pixperdeg = P.pixperdeg ;
@@ -545,7 +550,7 @@ Target = P.Target.( c.Target ) ;
     case  'gaussian'
       
       Target.position = mirror .* [ vpix.RfXDeg , vpix.RfYDeg ] ;
-      Target.sdx = vpix.RfRadDeg / 3 ;
+      Target.sdx = vpix.RfRadDeg * RfTargetFactor ;
       Target.sdy = Target.sdx ;
       Target.color( : ) = Weber( c.Contrast , WaitBak{ 2 } ) ;
       
@@ -774,7 +779,7 @@ for  row = 1 : size( STATE_TABLE , 1 )
   entarg = [ entarg , TrialError , { 'State' , states.( name ) , ...
     'Marker_entry' , P.evm.( [ name , '_entry' ] ) , ...
       'Marker_start' , P.evm.( [ name , '_start' ] ) , ...
-        'TimeZero' , states.Start } ] ;
+        'TimeZero' , states.Start } ] ; %#ok
   
   % onEntry input arg struct
   a = onEntry_args( entarg{ : } ) ;
@@ -826,19 +831,24 @@ if  P.UsingSynapse
     '%9sEnvelope %s\n' ] , '' , c.Laser , '' , c.LaserFreqHz , '' , ...
       c.LaserPhaseDeg , '' , c.LaserEnvelope ) ;
     
-  % Trial header
-  hdr = sprintf( [ 'Start trial %d\nCondition %d\nBlock %d\n' , ...
-    'Block type %d\nMotion direction deg %d\nReward ms %d' ] , ...
-      TrialData.currentTrial , TrialData.currentCondition , ...
-        TrialData.currentBlock , v.BlockType , c.DirectionDeg , rew ) ;
+  % Start of trial header
+  hdr = { sprintf( 'Start trial %d\nBlock %d' , TrialData.currentTrial ,...
+    TrialData.currentBlock ) } ;
+  
+  % Add condition info
+  hdr = [ hdr , ...
+    cellfun( @( fn ) sprintf( '%s %s' , fn , val2str( c.( fn ) ) ) , ...
+      fieldnames( c )' , 'UniformOutput' , false ) ] ;
+  
+  % Cell of str into classic string
+  hdr = strjoin( hdr , '\n' ) ;
 
   % Send header to Synapse server
-  if  ~ P.syn.setParameterValue( 'RecordingNotes' , 'Note' , hdr )
-    error( 'Failed to send trial header to Synapse.' )
-  end
+  iset( P.syn , 'RecordingNotes' , 'Note' , hdr )
   
   % Resume cyclical buffering of ephys signals
   P.buf.spk.startbuff( ) ; P.buf.mua.startbuff( ) ;
+  if  P.buf.difmualfp , P.buf.lfp.startbuff( ) ; end
 
 % No laser
 else
@@ -868,6 +878,9 @@ if  ~ isempty( P.ItiStim.previous )
   delete( P.ItiStim.previous )
   P.ItiStim.previous = [ ] ;
 end
+
+
+%%% END OF TASK SCRIPT %%%
 
 
 %%% --- SCRIPT FUNCTIONS --- %%%
@@ -987,7 +1000,7 @@ function  tab = tabvalchk( tab , cstrreg )
         errstr , func2str( valid.( c ) ) )
       
     % Support is cell array of string
-    elseif  iscellstr( sup.( c ) )
+    elseif  iscellstr( sup.( c ) ) %#ok
       
       % Get lower-case version of column's strings
       v = lower( v ) ;
@@ -1077,11 +1090,11 @@ function  I = Weber( c , Ib )
   
   % 'Hack' solution for training on black or red backgrounds. Scale zero-
   % valued RGB components from 0 to 255 by c.
-  I( Ib == 0 ) = c * double( intmax( 'uint8' ) ) ;
+  I( Ib == 0 ) = c * 255 ;
   
   % Guarantee that we don't exceed numeric range
-  I = max( I , 0 ) ;
-  I = min( I , double( intmax( 'uint8' ) ) ) ;
+  I = max( I ,   0 ) ;
+  I = min( I , 255 ) ;
   
 end % Weber
 
@@ -1167,4 +1180,18 @@ function  iset( syn , giz , par , val )
   end % failed to set
   
 end % iset
+
+
+% Convert matrix to string or return string
+function  str = val2str( val )
+  
+  % Already a string, return that. Otherwise, convert numeric matrix to
+  % string.
+  if  ischar( val )
+    str = val ;
+  else
+    str = mat2str( val ) ;
+  end
+  
+end % val2str
 
