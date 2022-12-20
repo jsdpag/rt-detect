@@ -245,8 +245,8 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
   dat.Failed  = err.Failed  ;
   
   % Map colours to target and laser types from table 'Target' and 'Laser'
-  col.Target.none     = col.blue  / 2 ;
-  col.Target.gaussian = col.green / 2 ;
+  col.Target.none     = col.blue   ;
+  col.Target.gaussian = col.green  ;
    col.Laser.none     = col.blue   ;
    col.Laser.test     = col.green  ;
    col.Laser.control  = col.yellow ;
@@ -254,9 +254,9 @@ plot( ax, x, y + 0, '.', 'MarkerEdgeColor', col.plum  , 'Tag' , 'Other' )];
   % Selection and un-selection parameters for the error bars and scatter
   % objects that show the empirical data.
   selpar = { ...
-    { 'Color' , col.blue / 2 , 'LineWidth' , 1 } ;
-    { 'MarkerEdgeColor' , col.blue / 2 , 'MarkerFaceColor' , col.blue , ...
-      'LineWidth' , 1 } } ;
+    { 'Color' , col.blue , 'LineWidth' , 1.3 } ;
+    { 'MarkerEdgeColor' , col.blue , 'MarkerFaceColor' , col.blue , ...
+      'LineWidth' , 1.3 } } ;
   unspar = { ...
     { 'Color' , col.lgrey , 'LineWidth' , 0.5 } ;
     { 'MarkerEdgeColor' , col.lgrey , 'MarkerFaceColor' , col.lgrey , ...

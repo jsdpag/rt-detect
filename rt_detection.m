@@ -319,9 +319,8 @@ else
         f , pre.userVariable{ end - 1 }.BlockType , c.Target , c.Laser ) ;
       
       % Information required to update plots
-      index = struct( 'x' , ...
-        P.tab.Contrast( P.tab.Condition == pre.conditions( end - 1 ) ) ,...
-          'err' , pre.trialError( end - 1 ) ) ;
+      index = struct( 'x' , P.tab.( BehaviourXaxis )( P.tab.Condition ==...
+        pre.conditions( end - 1 ) ) , 'err' , pre.trialError( end - 1 ) ) ;
       newdata = pre.reactionTime( end - 1 ) ;
       
       % Update empirical data and find least-squares best fit
