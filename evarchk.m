@@ -90,6 +90,10 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
   INTARG = { 'NumLaserChanOut' , 'TdtChannels' , 'MuaStartIndex' , ...
     'LfpStartIndex' } ;
   
+  % These variables are case invariant. Make sure that corresponding set of
+  % valid strings (lim, above) is lower case.
+  CASEINV = { 'TrainingMode' } ;
+  
   % Numeric variables
   for  N = fieldnames( v )' ; n = N{ 1 } ;
     
@@ -106,8 +110,8 @@ function  v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , ...
         error( '%s must be a char row vector i.e. a string' , n )
       end
       
-      % Make sure that string is lower case
-      v.( n ) = lower( v.( n ) ) ;
+      % Make sure that string is lower case for case invariant variables
+      if  any( strcmp( n , CASEINV ) ) , v.( n ) = lower( v.( n ) ) ; end
       
       % String not found in set of valid strings. Don't kill session. But
       % do warn user.

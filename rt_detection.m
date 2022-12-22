@@ -32,8 +32,9 @@ v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
               LfpStartIndex , LfpBuffer , StimRespSim ) ;
 
 % Properties of current trial condition. Used in 'Stimulus configuration'.
-c = table2struct(  P.tab( TrialData.currentCondition == ...
-  ARCADE_BLOCK_SELECTION_GLOBAL.tab.Condition , : )  ) ;
+c = table2struct(  ...
+  ARCADE_BLOCK_SELECTION_GLOBAL.tab( TrialData.currentCondition == ...
+    ARCADE_BLOCK_SELECTION_GLOBAL.tab.Condition , : )  ) ;
 
 
 %%% TRIAL INITIALISATION -- PERSISTENT DATA %%%
@@ -266,6 +267,11 @@ if  TrialData.currentTrial == 1
            'LatencyMs' , 0 )
         iset( P.syn , StimRespSim , ...
           'ResponseMs' , ReacTimeMinMs + RespWinWidMs )
+        
+        % Get min, max, and range of behav plot x-axis variable
+        P.xmin = min( P.tab.( BehaviourXaxis ) ) ;
+        P.xmax = min( P.tab.( BehaviourXaxis ) ) ;
+        P.xrng = P.xmax - P.xmin ;
 
       else
 
@@ -275,12 +281,7 @@ if  TrialData.currentTrial == 1
       end % set StimRespSim Giz
 
     % Create and initialise electrophysiology plots
-    P.efig = createphysfig( cfg , v , P.invtrans , P.tab ) ;
-  
-  % Not using SynapseAPI, set default values
-  else
-    
-    P.simresp = false ;
+    P.efig = createphysfig( cfg , v , P.tab ) ;
     
   end % synapse api actions
   
@@ -584,8 +585,13 @@ end
 
 %%% Laser stimulation parameters %%%
 
+% No connection to TDT Synapse, do nothing
+if  ~ P.UsingSynapse
+  
+  % No action required
+
 % We are connected to TDT Synapse and a laser is required on next trial
-if  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
+elseif  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
   
   % Gen inverse transfer function for laser in next trial condition
   itran = P.invtrans.( c.Laser ) ;
@@ -649,6 +655,16 @@ if  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
   % LaserSignalBuffer Gizmo for triggered playback.
   P.laserbuff.Signal = ppval( itran.piecewise_polynomial , X ) ;
   
+  % StimRespSim Gizmo in use
+  if  P.simresp
+    
+    % Duration of high-state is proportional to x-axis variable
+    iset( P.syn , StimRespSim , 'ResponseMs' , ...
+      ( c.( BehaviourXaxis ) - P.xmin ) / P.xrng  *  ...
+        ( ReacTimeMinMs + RespWinWidMs ) )
+
+  end % StimRespSim Gizmo
+  
 % We are connected to TDT Synapse and no laser is needed on next trial
 elseif  P.UsingSynapse  &&  strcmp( c.Laser , 'none' )
   
@@ -659,7 +675,7 @@ elseif  P.UsingSynapse  &&  strcmp( c.Laser , 'none' )
 % We should never get here
 else
   
-  error( 'Programming error!!!' )
+  error( 'Programming error in Laser parameter section.' )
   
 end % laser param
 
@@ -825,7 +841,7 @@ createTrial( 'Start' , states{ : } )
 % Laser is in use
 if  P.UsingSynapse
   
-  % Format laser string
+  % Format laser string for EchoServer
   lstr = sprintf( [ '%9sLaser %s\n%9sFreqHz %d\n%9sPhaseDeg %d\n' , ...
     '%9sEnvelope %s\n' ] , '' , c.Laser , '' , c.LaserFreqHz , '' , ...
       c.LaserPhaseDeg , '' , c.LaserEnvelope ) ;
@@ -852,10 +868,8 @@ if  P.UsingSynapse
 % No laser
 else
   
-  % Default laser string
-  lstr = sprintf( ...
-    '%9sLaser none\n%9sFreqHz 0\n%9sPhaseDeg 0\n%9sEnvelope none\n' , ...
-      '' , '' , '' , '' ) ;
+  % Default no laser string for EchoServer
+  lstr = '' ;
   
 end % laser
 
