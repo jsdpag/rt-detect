@@ -15,5 +15,14 @@
 % instead.
 cfg.ControlScreen = 'makeArcadeRemote.m' ;
 
-% Create sesslaunchparams
+%- Session launch parameters -%
+
+% Open a separate EDF file on EyeLink HostPC for each unique session ID
 sesslaunchparams.EyeServer_UniqueTmp = true ;
+
+% Place ARCADE remote in upper-right hand corner of screen
+sesslaunchparams.Location_ArcadeRemote = 'northeast' ;
+
+% Starting positions of EyeLinkServer and EchoServer
+sesslaunchparams.Position_EyeServer  = [ 1 , 1 , -1 , -1 ] ;
+sesslaunchparams.Position_EchoServer = [ 870 , 1 , 588 , 564 ] ;

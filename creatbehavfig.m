@@ -93,8 +93,8 @@ function  ofig = creatbehavfig( cfg , err , tab , xaxcol , weibull )
   fh = ofig.fig ;
   
   % Shape and ...
-  fh.Position( 3 ) = ( 1 + 1/3 ) * ofig.fig.Position( 3 ) ; % width
-  fh.Position( 4 ) =         0.9 * ofig.fig.Position( 4 ) ; % height
+  fh.Position( 3 ) = ( 1 + 1/3 ) * fh.Position( 3 ) ; % width
+  fh.Position( 4 ) =         0.9 * fh.Position( 4 ) ; % height
   
   % ... position the figure
   fh.Position( 1 : 2 ) = [ 1 , 31 ] ;
