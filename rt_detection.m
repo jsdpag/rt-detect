@@ -202,7 +202,7 @@ if  TrialData.currentTrial == 1
     P.buf.spk = TdtWinBuf( P.syn , SpikeBuffer ) ;
     P.buf.mua = TdtWinBuf( P.syn ,   MuaBuffer ) ;
     if  P.buf.difmualfp , P.buf.lfp = TdtWinBuf( P.syn , LfpBuffer ) ;
-    else                , P.bug.lfp = P.buf.mua ;
+    else                , P.buf.lfp = P.buf.mua ;
     end
     
       %- Set fixed buffer parameters -%
