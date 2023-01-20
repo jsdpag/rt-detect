@@ -1,7 +1,7 @@
 
-function  ofig = createphysfig( cfg , evar , tab )
+function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
 % 
-% ofig = createphysfig( cfg , evar , tab )
+% ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
 % 
 % Create and initialise electrophysiology plots. Called by task script. cfg
 % is the ArcadeConfig object of the current session. evar is a struct
@@ -9,6 +9,9 @@ function  ofig = createphysfig( cfg , evar , tab )
 % processed version of trial_condition_table.csv, which defines all trial
 % conditions and groups them into blocks of trials. Returns an onlinefigure
 % object. Create plots before running the first trial.
+% 
+% spk , mua , lfp are handles to spike, multiunit activity, and local field
+% potential buffer object handles.
 % 
 % Note, creates secondary figure window that allows selection of channel in
 % the main window.
@@ -21,12 +24,40 @@ function  ofig = createphysfig( cfg , evar , tab )
   arfc = @( varargin ) arrayfun( varargin{ : } , 'UniformOutput' , false );
   crfc = @( varargin )  cellfun( varargin{ : } , 'UniformOutput' , false );
   
+  % Data modalities, name strings
+  C.modality = { 'spk' , 'mua' , 'lfp' } ;
+  
+  % Number of data modalities
+  C.N.modality = numel( C.modality ) ;
+  
+  % Data domains
+  C.domain = { 'time' , 'freq' } ;
+  
+  % Number of data domains
+  C.N.domain = numel( C.domain ) ;
+  
+  % Pointers to buffer objects
+  C.buf.spk = spk ;
+  C.buf.mua = mua ;
+  C.buf.lfp = lfp ;
+  
+  % Remember modality specific starting indices for data buffers
+  C.istart.spk = 1 ;
+  C.istart.mua = evar.MuaStartIndex ;
+  C.istart.lfp = evar.LfpStartIndex ;
+  
+  % Number of TDT channels
+  C.N.chan = evar.TdtChannels ;
+  
   % Sampling rate for plotted data.
   C.fs = 1e3 ;
   
   % X-axis time bins for time plots. Also used to interpolate continuous
   % data down to 1kHz. In milliseconds.
   C.time = - evar.BaselineMs : evar.ReacTimeMinMs + evar.RespWinWidMs ;
+  
+  % Number of time bins
+  C.N.time = numel( C.time ) ;
   
   % Size of time window for Fourier transform, in milliseconds
   C.N.win = 200 ;
@@ -37,17 +68,31 @@ function  ofig = createphysfig( cfg , evar , tab )
   % Hann window, apply to windowed time data for FFT
   C.hann = hann( C.N.win ) ;
   
-  % Frequency bins, in Hz
-  C.freq = ( 0 : C.N.fft - 1 ) * ( C.fs / C.N.fft ) ;
+  % FFT frequency bins, in Hz
+  C.fft = ( 0 : C.N.fft - 1 ) * ( C.fs / C.N.fft ) ;
   
   % Maximum kept frequency bin, in Hz
   C.maxfreq = 100 ;
   
   % Logical index vector for kept frequency bins
-  C.ifreq = C.freq <= C.maxfreq ;
+  C.ifreq = C.fft <= C.maxfreq ;
   
-  % Time and frequency windows, Hann window, other defaults.
+  % Subset of frequency bins
+  C.freq = C.fft( C.ifreq ) ;
   
+  % Number of frequency bins
+  C.N.freq = numel( C.freq ) ;
+  
+  % Time and frequency plot x-axis tick marks, in 100ms & 10Hz steps
+  C.xtick.time = ceil( C.time(  1  ) / 100 ) * 100 : 100 : ...
+                floor( C.time( end ) / 100 ) * 100 ;
+  C.xtick.freq = ceil( C.freq(  1  ) / 10  ) * 10  : 10  : ...
+                floor( C.time( end ) / 10  ) * 10  ;
+
+  % Spike train convolution kernel with 20ms time constant, millisecond
+  % time bins
+  C.kern = exp( - ( 0 : 255 )' ./ 20 ) ;
+  C.kern = C.kern ./ sum( C.kern ) ;
   
   
   %%% Blocks of trials %%%
@@ -94,7 +139,10 @@ function  ofig = createphysfig( cfg , evar , tab )
   
   % Make channel selection figure
   ch = figure( 'MenuBar' , 'none' , 'ToolBar' , 'none' , 'Tag' , ...
-    'Channel' , 'Visible' , 'off' ) ;
+    'Channel' ) ;
+  
+  % We have to show this or else the re-size and -positioning fails
+  drawnow
   
   % Shape and ...
   ch.OuterPosition( 3 ) = rh.OuterPosition( 3 ) ;
@@ -107,8 +155,12 @@ function  ofig = createphysfig( cfg , evar , tab )
   
   % Selection list box
   lstbox = uicontrol( ch , 'Style' , 'listbox' , 'String' , ...
-    arrayfun( @( i ) sprintf( 'Tdt Chan %d' , i ), 1 : evar.TdtChannels,...
-      'UniformOutput' , false ), 'Tag', 'chansel' ) ;
+    arrayfun( @( i ) sprintf( 'Tdt Chan %d' , i ), 1 : C.N.chan,...
+      'UniformOutput' , false ), 'Callback', @lstbox_cb, ...
+        'UserData' , ofig , 'Tag', 'chansel' ) ;
+      
+  % There is only one channel, so disable this list box
+  if  C.N.chan == 1 , lstbox.Callback = [ ] ; end
   
   % Position box
   lstbox.Units = 'normalized' ;
@@ -119,16 +171,16 @@ function  ofig = createphysfig( cfg , evar , tab )
   %%% Create axes %%%
   
   % Spike rate time and frequency plots
-  ofig.subplot( 3 , 2 , 1 , 'Tag' , 'SpikeTime' ) ;
-  ofig.subplot( 3 , 2 , 2 , 'Tag' , 'SpikeFreq' ) ;
+  ofig.subplot( 3 , 2 , 1 , 'XTick' , C.xtick.time , 'Tag' , 'spktime' ) ;
+  ofig.subplot( 3 , 2 , 2 , 'XTick' , C.xtick.freq , 'Tag' , 'spkfreq' ) ;
   
   % Multi unit activity time and frequency plots
-  ofig.subplot( 3 , 2 , 3 , 'Tag' , 'MuaTime' ) ;
-  ofig.subplot( 3 , 2 , 4 , 'Tag' , 'MuaFreq' ) ;
+  ofig.subplot( 3 , 2 , 3 , 'XTick' , C.xtick.time , 'Tag' , 'muatime' ) ;
+  ofig.subplot( 3 , 2 , 4 , 'XTick' , C.xtick.freq , 'Tag' , 'muafreq' ) ;
   
   % Local field potential time and frequency plots
-  ofig.subplot( 3 , 2 , 5 , 'Tag' , 'LfpTime' ) ;
-  ofig.subplot( 3 , 2 , 6 , 'Tag' , 'LfpFreq' ) ;
+  ofig.subplot( 3 , 2 , 5 , 'XTick' , C.xtick.time , 'Tag' , 'lfptime' ) ;
+  ofig.subplot( 3 , 2 , 6 , 'XTick' , C.xtick.freq , 'Tag' , 'lfpfreq' ) ;
   
   
   %%% Colour name to RGB map %%%
@@ -149,18 +201,193 @@ function  ofig = createphysfig( cfg , evar , tab )
    col.Laser.none     = col.blue   ;
    col.Laser.test     = col.green  ;
    col.Laser.control  = col.yellow ;
+   
+   
+  %%% Create graphics object groups %%%
+  
+  % Selection and unselection parameter indices
+  isel = struct( 'Color' , 2 , 'LineWidth' , 4 , 'data' , 1 , 'error' , 2);
+  
+  % Selection and unselection parameter cell arrays. Outer cell is ordered
+  % [ data , error bars ], inner cell contains parameters.
+  selpar = { { 'Color' , col.blue , 'LineWidth' , 1.3 } ;
+             { 'Color' , col.blue , 'LineWidth' , 1.3 , ...
+               'Visible' , 'on' } } ;
+  unspar = { { 'Color' , col.lgrey , 'LineWidth' , 0.5 } ;
+             { 'Visible' , 'off' } } ;
+           
+  % NaN y-axis data for seeding graphics objects
+  ynan.time = nan( C.N.time , 1 ) ;
+  ynan.freq = nan( C.N.freq , 1 ) ;
+  
+  % Error bar x- and y-axis values
+  err.x.time = [ C.time ; NaN ; C.time ] ;
+  err.x.freq = [ C.freq ; NaN ; C.freq ] ;
+  err.y.time = nan( size( err.x.time ) ) ;
+  err.y.freq = nan( size( err.x.freq ) ) ;
+
+	% Group data points to the same constants struct
+  dat.C = C ;
+
+  % Blocks of trials
+  for  b = 1 : blk.N
+    
+    % Get block i.e. set identifier string
+    nam = blk.nam{ b } ;
+
+    % Find rows for this type of block
+    r = tab.BlockType == blk.typ( b ) ;
+
+    % Combine visual target and laser type in each row of table
+    TL = crfc( @( T , L ) sprintf( '%s\n%s' , T , L ) , ...
+      tab.Target( r ) , tab.Laser( r ) )' ;
+
+    % Keep only unique combinations of target/laser types
+    TL = unique( TL ) ;
+
+    % Target/laser combinations, 
+    for  TL = TL
+      
+      % Get target and laser type strings
+      tl = strsplit( TL{ 1 } , '\n' ) ;
+      [ target , laser ] = tl{ : } ;
+
+      % Make group identifier string
+      id = [ nam , ' ' , target , ' ' , laser ] ;
+      
+      % Initialise graphics handle vector, and cell vectors of parameters
+      H = cell( 1 , C.N.modality * C.N.domain ) ;
+      S = cell( 1 , C.N.modality * C.N.domain ) ;
+      U = cell( 1 , C.N.modality * C.N.domain ) ;
+      
+      % Group index initialised
+      i = 0 ;
+      
+      % Data modalities
+      for  M = C.modality ; m = M{ 1 } ;
+        
+        % Data domains, & increment group index
+        for  D = C.domain ; d = D{ 1 } ; i = i + 1 ;
+          
+          % Parent axes
+          ax = findobj( fh , 'Type' , 'axes' , 'Tag' , [ m , d ] ) ;
+          
+          % Data will be a Welford array, for accumulating an estimate of
+          % variance. Time/freq across rows, TDT channels across columns
+          dat.( m ).( d ) = Welford( C.N.( d ) , C.N.chan ) ;
+
+          % Create data and error graphics objects
+          h = [ plot( ax , C.( d ) , ynan.( d ) , ...
+                      'Tag' , [ m , d , 'data' ] ) , ...
+                plot( ax , err.x.( d ) , err.y.( d ) , ...
+                      'Tag' , [ m , d , 'error' ] ) ] ;
+
+          % Set selection colours. Data shows laser, error shows target.
+          selpar{ isel.data  }{ isel.Color } =  col.Laser.( laser  ) ;
+          selpar{ isel.error }{ isel.Color } = col.Target.( target ) ;
+          
+          % Accumulate graphics objects and parameter settings
+          H{ i } = h ;
+          S{ i } = selpar ;
+          U{ i } = unspar ;
+          
+        end % data domains
+      end % data modalities
+      
+      % Concatenate group's graphics objects and parameter lists
+      H = [ H{ : } ] ;  S = [ S{ : } ] ;  U = [ U{ : } ] ;
+      
+      % Add graphics object group and bind parameters
+      ofig.addgroup ( id , nam , dat , H , @fupdate )
+      ofig.bindparam( id ,   'seldata' , S{ : } )
+      ofig.bindparam( id , 'unseldata' , U{ : } )
+          
+    end % target/laser combos
+  end % blocks
   
   
   %%% Done %%%
   
   % Apply formatting through selection of first block, by default
-%   ofig.select( 'set' , blk.nam{ 1 } )
-ofig.fnam = '' ; % remove after testing
+  ofig.select( 'set' , ofig.grp( 1 ).id )
   
   % Show thine creations
   fh.Visible = 'on' ;
   ch.Visible = 'on' ;
   
+%%% TESTING %%%
+ofig.fnam = '' ;
+%%% TESTING %%%
   
 end % createphysfig
+
+
+%%% Define data = fupdate( hdata , data , index , newdata ) %%%
+
+function  dat = fupdate( H , dat , ~ , ~ )
+  
+  % Point to constants
+  C = dat.C ;
+  
+  % Data modalities name, and channel starting index
+  for  M = C.modality ; m = M{ 1 } ; istart = C.istart.( m ) ;
+    
+    % Get buffered time stamps and data values
+    T = C.buf.( m ).time ;
+    X = C.buf.( m ).data( : , istart : istart + C.N.chan - 1 ) ;
+    
+    % Analysis in time/freq domains
+    
+  end % data modalities
+  
+end % fupdate
+
+
+%%% Channel selection callback %%%
+
+% Load graphics objects with 
+function  lstbox_cb( lb , ~ )
+  
+  % TDT channel index
+  ch = lb.Value ;
+  
+  % Point to onlinefigure object
+  ofig = lb.UserData ;
+  
+  % Point to common constants
+  C = ofig.grp( 1 ).data.C ;
+  
+  % Groups, supporting data, graphics objects
+  for  grp = ofig.grp , dat = grp.data ; H = grp.hdata ;
+    
+    % Data modalities
+    for  M = C.modality ; m = M{ 1 } ;
+
+      % Data domains, & increment group index
+      for  D = C.domain ; d = D{ 1 } ; i = i + 1 ;
+
+        % Fetch Welford array
+        w = dat.( m ).( d ) ;
+        
+        % Running average and standard error of mean
+        a = w.avg( : , ch ) ;
+        e = w.sem( : , ch ) ;
+        
+        % Find data line
+        h = findobj( H , 'Tag' , [ m , d , 'data' ] ) ;
+        
+        % Switch/update channel mean value
+        h.YData( : ) = a ;
+        
+        % Find error bars
+        h = findobj( H , 'Tag' , [ m , d , 'error' ] ) ;
+        
+        % Compute new mean +/- SEM values
+        h.YData( : ) = [ a + e ; NaN ; a - e ] ;
+
+      end % domain
+    end % modality
+  end % groups
+  
+end % lstbox_cb
 
