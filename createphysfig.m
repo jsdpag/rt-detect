@@ -24,6 +24,12 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   arfc = @( varargin ) arrayfun( varargin{ : } , 'UniformOutput' , false );
   crfc = @( varargin )  cellfun( varargin{ : } , 'UniformOutput' , false );
   
+  % Axis labels
+  L.X.time = 'Time from target on (ms)' ;
+  L.X.freq = 'Frequency (Hz)' ;
+  L.Y.time = 'Avg. +/- SEM' ;
+  L.Y.freq = 'log_10 Avg.+/-SEM' ;
+  
   % Data modalities, name strings
   C.modality = { 'spk' , 'mua' , 'lfp' } ;
   
@@ -36,18 +42,18 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   % Number of data domains
   C.N.domain = numel( C.domain ) ;
   
+  % Number of TDT channels
+  C.N.chan = evar.TdtChannels ;
+  
   % Pointers to buffer objects
   C.buf.spk = spk ;
   C.buf.mua = mua ;
   C.buf.lfp = lfp ;
   
-  % Remember modality specific starting indices for data buffers
-  C.istart.spk = 1 ;
-  C.istart.mua = evar.MuaStartIndex ;
-  C.istart.lfp = evar.LfpStartIndex ;
-  
-  % Number of TDT channels
-  C.N.chan = evar.TdtChannels ;
+  % Remember modality specific channel indices for data buffers
+  C.ichan.spk = 1 : C.N.chan ;
+  C.ichan.mua = evar.MuaStartIndex : evar.MuaStartIndex + C.N.chan - 1 ;
+  C.ichan.lfp = evar.LfpStartIndex : evar.LfpStartIndex + C.N.chan - 1 ;
   
   % Sampling rate for plotted data.
   C.fs = 1e3 ;
@@ -170,17 +176,26 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   
   %%% Create axes %%%
   
-  % Spike rate time and frequency plots
-  ofig.subplot( 3 , 2 , 1 , 'XTick' , C.xtick.time , 'Tag' , 'spktime' ) ;
-  ofig.subplot( 3 , 2 , 2 , 'XTick' , C.xtick.freq , 'Tag' , 'spkfreq' ) ;
-  
-  % Multi unit activity time and frequency plots
-  ofig.subplot( 3 , 2 , 3 , 'XTick' , C.xtick.time , 'Tag' , 'muatime' ) ;
-  ofig.subplot( 3 , 2 , 4 , 'XTick' , C.xtick.freq , 'Tag' , 'muafreq' ) ;
-  
-  % Local field potential time and frequency plots
-  ofig.subplot( 3 , 2 , 5 , 'XTick' , C.xtick.time , 'Tag' , 'lfptime' ) ;
-  ofig.subplot( 3 , 2 , 6 , 'XTick' , C.xtick.freq , 'Tag' , 'lfpfreq' ) ;
+  % Subplot index initialised
+  i = 0 ;
+
+  % Data domains, & increment group index
+  for  D = C.domain ; d = D{ 1 } ; i = i + 1 ;
+    
+    % Data modalities, increment subplot index, make tag
+    for  M = C.modality ; m = M{ 1 } ; i = i + 1 ; tag = [ m , d ] ;
+      
+      % Make new axes
+      ax = ofig.subplot( 3 , 2 , i , 'XTick', C.xtick.( d ), 'Tag', tag ) ;
+      
+      % Clear x-tick labels on all but bottom plots, which have axis labels
+      if  i < 5 , ax.XTickLabel = [] ; else, xlabel( ax , L.X.( d ) ), end
+      
+      % Set y-axis label on bottom plots
+      if  i >= 5 , ylabel( ax , L.Y.( d ) ) , end
+      
+    end % modality
+  end % domain
   
   
   %%% Colour name to RGB map %%%
@@ -324,29 +339,116 @@ end % createphysfig
 
 %%% Define data = fupdate( hdata , data , index , newdata ) %%%
 
-function  dat = fupdate( H , dat , ~ , ~ )
+% Note that the update function is only needed to accumulate new data.
+% Refreshing the graphics objects is done by a call to the 'chansel' list
+% box callback. Fourier transform taken from last C.N.win ms window of
+% buffered data, unless a reaction time is given (non-empty); then it is
+% last C.N.win ms before RT.
+function  dat = fupdate( H , dat , ~ , rt )
   
   % Point to constants
   C = dat.C ;
   
+  % Reaction time is not given, take last data point.
+  if  isempty( rt )  ||  ~ isscalar( rt )  ||  ~ isnumeric( rt )
+    rt = C.time( end ) ;
+  else
+    rt = floor( rt ) ; % Guarantee integer value
+    rt = min( rt , C.time( end ) ) ; % Guarantee maximum RT value
+  end
+  
+  % Get milliseconds inside time window
+  w = rt - C.N.win : rt - 1 ;
+  
+  % Subtract time of the last bin, to get ms from end of RT or buffer
+  w = w  -  C.time( end ) ;
+  
+  % Add number of time bins to get linear indices of time bins in window
+  w = w  +  C.N.time ;
+  
   % Data modalities name, and channel starting index
-  for  M = C.modality ; m = M{ 1 } ; istart = C.istart.( m ) ;
+  for  M = C.modality ; m = M{ 1 } ; ichan = C.ichan.( m ) ;
     
     % Get buffered time stamps and data values
     T = C.buf.( m ).time ;
-    X = C.buf.( m ).data( : , istart : istart + C.N.chan - 1 ) ;
+    X = C.buf.( m ).data( : , ichan ) ;
     
-    % Analysis in time/freq domains
+    % Process data according to its modality
+    switch  m
+      
+      % Spike times
+      case  'spk'
+        
+        % First, allocate spike raster, ms time bins x channels
+        R = zeros( C.N.time , C.N.chan ) ;
+        
+        % Channels
+        for  ch = 1 : C.N.chan
+          
+          % Spike times
+          t = T( X( : , ch ) > 0 ) ;
+          
+          % Convert from times to ms bin index
+          t = ceil( ( t - C.time( 1 ) + 1 ) ) ;
+          
+          % Discard anything that falls off the edges
+          t( t <= 0 | t > C.N.time ) = [ ] ;
+          
+          % No spikes, go to next channel
+          if  isempty( t ) , continue , end
+          
+          % Raise raster time bins that contain a spike
+          R( t , ch ) = 1 ;
+          
+        end % channels
+        
+        % Convolve spike raster with causal exponential kernel. This
+        % function is available in the mak repository. It can be cloned in
+        % a generic location such as C:\Toolbox\mak
+        X = makconv( R , C.kern , 'c' ) ;
+        
+      % Continuous multiunit or local field potential activity
+      case  { 'mua' , 'lfp' }
+        
+        % Linear interpolation at specified millisecond time bins
+        X = interp1( T , X , C.time ) ;
+        
+    end % process neural data
+    
+    % Accumulate time series data into existing Welford array
+    dat.( m ).time = dat.( m ).time  +  X ;
+    
+    % Windowed time domain data, apply Hann window
+    X = X( w , : )  .*  C.hann ;
+    
+    % Get fourier transform, normalise by number of samples
+    X = fft( X ) / C.N.win ;
+    
+    % Compute spectral magnitude
+    X = 2 * abs( X ) ;
+    
+    % Accumulate spectral magnitude into Welford array
+    dat.( m ).freq = dat.( m ).freq  +  X( subset of freq bins!!! ) ;
     
   end % data modalities
+  
+  % Get Channel selection figure, then it's channel selection list box.
+  h = findobj( 'Type' , 'figure' , 'Tag' , 'Channel' ) ;
+  h = findobj( h , 'Tag' , 'chansel' ) ;
+  
+  % Run list box callback to refresh graphics objects. Pass in the set of
+  % graphics objects to update.
+  h.Callback( h , [ ] , H ) ;
   
 end % fupdate
 
 
 %%% Channel selection callback %%%
 
-% Load graphics objects with 
-function  lstbox_cb( lb , ~ )
+% Load graphics objects with data from newly selected channel. Or refresh
+% view of existing selection. Optional third input arg used to restrict
+% update to a set of group ids, must be cell of string(s).
+function  lstbox_cb( lb , ~ , hset )
   
   % TDT channel index
   ch = lb.Value ;
@@ -357,8 +459,14 @@ function  lstbox_cb( lb , ~ )
   % Point to common constants
   C = ofig.grp( 1 ).data.C ;
   
+  % Third input arg given. It is array of graphics objects. Raise flag.
+  hflg = nargin > 2  &&  all( isgraphics( hset ) ) ;
+  
   % Groups, supporting data, graphics objects
   for  grp = ofig.grp , dat = grp.data ; H = grp.hdata ;
+    
+    % Group id flag is high but group id is not in given set, skip
+    if  hflg  &&  ~ all( ismember( H , hset ) ) , continue , end
     
     % Data modalities
     for  M = C.modality ; m = M{ 1 } ;
@@ -377,17 +485,28 @@ function  lstbox_cb( lb , ~ )
         h = findobj( H , 'Tag' , [ m , d , 'data' ] ) ;
         
         % Switch/update channel mean value
-        h.YData( : ) = a ;
+        h.YData( : ) = transform( a ) ;
         
         % Find error bars
         h = findobj( H , 'Tag' , [ m , d , 'error' ] ) ;
         
         % Compute new mean +/- SEM values
-        h.YData( : ) = [ a + e ; NaN ; a - e ] ;
+        h.YData( : ) = transform( [ a + e ; NaN ; a - e ] ) ;
 
       end % domain
     end % modality
   end % groups
+  
+  %%% Sub-function %%%
+  
+  % If domain is time then a is returned. But if d is freq then dB is
+  % computed, defined as 20log_10( a )
+  function  a = transform( a , d )
+    switch  d
+      case 'time' , return
+      case 'freq' , a = 20 * log10( a ) ;
+    end
+  end
   
 end % lstbox_cb
 
