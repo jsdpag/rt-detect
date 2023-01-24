@@ -123,7 +123,7 @@ if  TrialData.currentTrial == 1
     % Parameters are fixed
     P.Fix.position = [ 0 , 0 ] ;
     P.Fix.faceColor( : ) = 255 ;
-    P.Fix.lineColor( : ) = 0 ;
+    P.Fix.lineColor( : ) = 255 ;
     P.Fix.lineWidth = 1 ;
     P.Fix.drawMode = 3 ;
     P.Fix.width = sqrt( pi * 0.075 ^ 2 ) * P.pixperdeg ;
@@ -169,7 +169,7 @@ if  TrialData.currentTrial == 1
   if  P.UsingSynapse
     
     % Load up inverse laser transfer functions
-    P.invtrans = getlasercoefs( cfg , 'laser_coefs' ) ;
+    P.invtrans = getlasercoefs( cfg , 'laser_coefs.mat' ) ;
     
     % Create a LaserController MATLAB object for setting parameter values
     % of the named LaserController Gizmo
@@ -270,7 +270,7 @@ if  TrialData.currentTrial == 1
         
         % Get min, max, and range of behav plot x-axis variable
         P.xmin = min( P.tab.( BehaviourXaxis ) ) ;
-        P.xmax = min( P.tab.( BehaviourXaxis ) ) ;
+        P.xmax = max( P.tab.( BehaviourXaxis ) ) ;
         P.xrng = P.xmax - P.xmin ;
 
       else
@@ -281,7 +281,7 @@ if  TrialData.currentTrial == 1
       end % set StimRespSim Giz
 
     % Create and initialise electrophysiology plots
-    P.efig = createphysfig( cfg , v , P.tab ) ;
+    [ P.efig , P.chlst ] = createphysfig( cfg , v , P.tab , P.buf ) ;
     
   end % synapse api actions
   
@@ -290,6 +290,10 @@ else
   
   % Retrieve persistent data
   P = persist ;
+  
+  % Trial condition table row from previous trial
+  cpre = table2struct(  P.tab( pre.conditions( end - 1 ) == ...
+    P.tab.Condition , : )  ) ; 
   
   %-- Update behaviour plots based on previous trial --%
   
@@ -346,17 +350,41 @@ else
       P.bfig.select( 'set' , id )
     end
     
-  % Using synapse and trial was correct or failed so update ephys plots
-  if  P.UsingSynapse && ( pre.trialError( end - 1 ) == P.err.Correct || ...
+  % Using synapse
+  if  P.UsingSynapse
+    
+    % Select groups for new block, using id from behaviour set selection
+    if  diff( pre.blocks( end - [ 1 , 0 ] ) )
+      P.bfig.select( 'set' , id )
+    end
+    
+    % Trial was correct or failed so update ephys plots
+    if  ( pre.trialError( end - 1 ) == P.err.Correct || ...
                           pre.trialError( end - 1 ) == P.err.Failed )
     
-    % Retrieve buffered data
-    P.buf.spk.getdata( ) ; P.buf.mua.getdata( ) ;
-    if  P.buf.difmualfp , P.buf.lfp.getdata( ) ; end
+      % Retrieve buffered data
+      P.buf.spk.getdata( ) ; P.buf.mua.getdata( ) ;
+      if  P.buf.difmualfp , P.buf.lfp.getdata( ) ; end
+
+      % Id of block type on previous trial
+      id = sprintf( 'Block %d' , pre.userVariable{ end - 1 }.BlockType ) ;
+
+      % Build name of graphics group to update
+      id = [ id , ' ' , cpre.Target , ' ' , cpre.Laser ] ;
+
+      % Get reaction time, if it exists
+      switch  pre.trialError( end - 1 )
+        case  P.err.Correct , rt = pre.reactionTime( end - 1 ) ;
+        case  P.err.Failed  , rt = [ ] ;
+      end
+
+      % Update plots
+      P.efig.update( id , [ ] , rt )
+      
+      % Refresh graphics objects for named group
+      P.chlst.Callback( P.chlst , [ ] , id ) ;
     
-    % Update plots
-    P.efig
-    
+    end % correct/failed
   end % update ephys plot
     
 end % trial init
@@ -619,7 +647,7 @@ elseif  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
   else
     
     % Time vector spanning laser signal
-    X = ( 1 : N ) .* P.laserbuff.FsSignal ;
+    X = ( 1 : N ) ./ P.laserbuff.FsSignal ;
     
     % Convert phase from degrees to radians
     phi = pi / 180 * c.LaserPhaseDeg ;
@@ -653,7 +681,7 @@ elseif  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
   % Inverse transfer function converts the power output that we want into
   % the voltage that we need to produce the desired output. Loaded into the
   % LaserSignalBuffer Gizmo for triggered playback.
-  P.laserbuff.Signal = ppval( itran.piecewise_polynomial , X ) ;
+  P.laserbuff.Signal = ppval( itran.piecewise_polynomial.inv , X ) ;
   
   % StimRespSim Gizmo in use
   if  P.simresp
@@ -1058,6 +1086,12 @@ function  lasers = getlasercoefs( cfg , coefs )
 
   % Name of the .mat coefficient file
   fnam = fullfile( cfg.filepaths.Backup , coefs ) ;
+  
+  % Check for it
+  if  ~ exist( fnam , 'file' )
+    error( [ 'Laser coefficient file missing. Is it in user added ' , ...
+      'list?\nMissing: %s' ] , fnam )
+  end
   
   % Load this into a struct
   c = load( fnam ) ;

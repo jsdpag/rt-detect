@@ -1,17 +1,19 @@
 
-function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
+function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
 % 
-% ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
+% [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
 % 
 % Create and initialise electrophysiology plots. Called by task script. cfg
 % is the ArcadeConfig object of the current session. evar is a struct
 % containing all editable variables. tab is a Table object containing
 % processed version of trial_condition_table.csv, which defines all trial
 % conditions and groups them into blocks of trials. Returns an onlinefigure
-% object. Create plots before running the first trial.
+% object. Create plots before running the first trial. Also returns list
+% box for selecting ephys channel to display; this is used by task script
+% to refresh the display.
 % 
-% spk , mua , lfp are handles to spike, multiunit activity, and local field
-% potential buffer object handles.
+% buf has fields spk , mua , lfp storing handles to spike, multiunit
+% activity, and local field potential buffer object handles.
 % 
 % Note, creates secondary figure window that allows selection of channel in
 % the main window.
@@ -27,8 +29,8 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   % Axis labels
   L.X.time = 'Time from target on (ms)' ;
   L.X.freq = 'Frequency (Hz)' ;
-  L.Y.time = 'Avg. +/- SEM' ;
-  L.Y.freq = 'log_10 Avg.+/-SEM' ;
+  L.Y.time = 'Avg. +/-SEM' ;
+  L.Y.freq = 'dBV(Avg.+/-SEM)' ;
   
   % Data modalities, name strings
   C.modality = { 'spk' , 'mua' , 'lfp' } ;
@@ -46,9 +48,7 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   C.N.chan = evar.TdtChannels ;
   
   % Pointers to buffer objects
-  C.buf.spk = spk ;
-  C.buf.mua = mua ;
-  C.buf.lfp = lfp ;
+  C.buf = buf ;
   
   % Remember modality specific channel indices for data buffers
   C.ichan.spk = 1 : C.N.chan ;
@@ -93,7 +93,7 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   C.xtick.time = ceil( C.time(  1  ) / 100 ) * 100 : 100 : ...
                 floor( C.time( end ) / 100 ) * 100 ;
   C.xtick.freq = ceil( C.freq(  1  ) / 10  ) * 10  : 10  : ...
-                floor( C.time( end ) / 10  ) * 10  ;
+                floor( C.freq( end ) / 10  ) * 10  ;
 
   % Spike train convolution kernel with 20ms time constant, millisecond
   % time bins
@@ -160,18 +160,18 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   ch.Position( 2 ) = fh.OuterPosition( 2 ) + fh.OuterPosition( 4 ) ;
   
   % Selection list box
-  lstbox = uicontrol( ch , 'Style' , 'listbox' , 'String' , ...
+  chlst = uicontrol( ch , 'Style' , 'listbox' , 'String' , ...
     arrayfun( @( i ) sprintf( 'Tdt Chan %d' , i ), 1 : C.N.chan,...
       'UniformOutput' , false ), 'Callback', @lstbox_cb, ...
         'UserData' , ofig , 'Tag', 'chansel' ) ;
       
   % There is only one channel, so disable this list box
-  if  C.N.chan == 1 , lstbox.Callback = [ ] ; end
+  if  C.N.chan == 1 , chlst.Callback = [ ] ; end
   
   % Position box
-  lstbox.Units = 'normalized' ;
-  lstbox.Position( 1 : 2 ) = 0.025 ;
-  lstbox.Position( 3 : 4 ) = 0.950 ;
+  chlst.Units = 'normalized' ;
+  chlst.Position( 1 : 2 ) = 0.025 ;
+  chlst.Position( 3 : 4 ) = 0.950 ;
   
   
   %%% Create axes %%%
@@ -180,10 +180,10 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   i = 0 ;
 
   % Data domains, & increment group index
-  for  D = C.domain ; d = D{ 1 } ; i = i + 1 ;
+  for  M = C.modality ; m = M{ 1 } ;
     
     % Data modalities, increment subplot index, make tag
-    for  M = C.modality ; m = M{ 1 } ; i = i + 1 ; tag = [ m , d ] ;
+    for  D = C.domain ; d = D{ 1 } ; i = i + 1 ; tag = [ m , d ] ;
       
       % Make new axes
       ax = ofig.subplot( 3 , 2 , i , 'XTick', C.xtick.( d ), 'Tag', tag ) ;
@@ -236,8 +236,8 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   ynan.freq = nan( C.N.freq , 1 ) ;
   
   % Error bar x- and y-axis values
-  err.x.time = [ C.time ; NaN ; C.time ] ;
-  err.x.freq = [ C.freq ; NaN ; C.freq ] ;
+  err.x.time = [ C.time , NaN , C.time ] ;
+  err.x.freq = [ C.freq , NaN , C.freq ] ;
   err.y.time = nan( size( err.x.time ) ) ;
   err.y.freq = nan( size( err.x.freq ) ) ;
 
@@ -324,15 +324,11 @@ function  ofig = createphysfig( cfg , evar , tab , spk , mua , lfp )
   %%% Done %%%
   
   % Apply formatting through selection of first block, by default
-  ofig.select( 'set' , ofig.grp( 1 ).id )
+  ofig.select( 'group' , ofig.grp( 1 ).id )
   
   % Show thine creations
   fh.Visible = 'on' ;
   ch.Visible = 'on' ;
-  
-%%% TESTING %%%
-ofig.fnam = '' ;
-%%% TESTING %%%
   
 end % createphysfig
 
@@ -344,7 +340,7 @@ end % createphysfig
 % box callback. Fourier transform taken from last C.N.win ms window of
 % buffered data, unless a reaction time is given (non-empty); then it is
 % last C.N.win ms before RT.
-function  dat = fupdate( H , dat , ~ , rt )
+function  dat = fupdate( ~ , dat , ~ , rt )
   
   % Point to constants
   C = dat.C ;
@@ -433,14 +429,6 @@ function  dat = fupdate( H , dat , ~ , rt )
     
   end % data modalities
   
-  % Get Channel selection figure, then it's channel selection list box.
-  h = findobj( 'Type' , 'figure' , 'Tag' , 'Channel' ) ;
-  h = findobj( h , 'Tag' , 'chansel' ) ;
-  
-  % Run list box callback to refresh graphics objects. Pass in the set of
-  % graphics objects to update.
-  h.Callback( h , [ ] , H ) ;
-  
 end % fupdate
 
 
@@ -448,8 +436,8 @@ end % fupdate
 
 % Load graphics objects with data from newly selected channel. Or refresh
 % view of existing selection. Optional third input arg used to restrict
-% update to a set of group ids, must be cell of string(s).
-function  lstbox_cb( lb , ~ , hset )
+% update to a named of group.
+function  lstbox_cb( lb , ~ , id )
   
   % TDT channel index
   ch = lb.Value ;
@@ -460,20 +448,20 @@ function  lstbox_cb( lb , ~ , hset )
   % Point to common constants
   C = ofig.grp( 1 ).data.C ;
   
-  % Third input arg given. It is array of graphics objects. Raise flag.
-  hflg = nargin > 2  &&  all( isgraphics( hset ) ) ;
+  % Third input arg given. It is a classic string. Raise flag.
+  idflg = nargin > 2  &&  ischar( id )  &&  isrow( id ) ;
   
   % Groups, supporting data, graphics objects
   for  grp = ofig.grp , dat = grp.data ; H = grp.hdata ;
     
-    % Group id flag is high but group id is not in given set, skip
-    if  hflg  &&  ~ all( ismember( H , hset ) ) , continue , end
+    % Group id flag is high but group id does not match input arg
+    if  idflg  &&  ~ strcmp( grp.id , id ) , continue , end
     
     % Data modalities
     for  M = C.modality ; m = M{ 1 } ;
 
-      % Data domains, & increment group index
-      for  D = C.domain ; d = D{ 1 } ; i = i + 1 ;
+      % Data domains
+      for  D = C.domain ; d = D{ 1 } ;
 
         % Fetch Welford array
         w = dat.( m ).( d ) ;
@@ -486,13 +474,13 @@ function  lstbox_cb( lb , ~ , hset )
         h = findobj( H , 'Tag' , [ m , d , 'data' ] ) ;
         
         % Switch/update channel mean value
-        h.YData( : ) = transform( a ) ;
+        h.YData( : ) = transform( a , d ) ;
         
         % Find error bars
         h = findobj( H , 'Tag' , [ m , d , 'error' ] ) ;
         
         % Compute new mean +/- SEM values
-        h.YData( : ) = transform( [ a + e ; NaN ; a - e ] ) ;
+        h.YData( : ) = transform( [ a + e ; NaN ; a - e ] , d ) ;
 
       end % domain
     end % modality
