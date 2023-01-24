@@ -421,14 +421,15 @@ function  dat = fupdate( H , dat , ~ , rt )
     % Windowed time domain data, apply Hann window
     X = X( w , : )  .*  C.hann ;
     
-    % Get fourier transform, normalise by number of samples
-    X = fft( X ) / C.N.win ;
+    % Get fourier transform, normalise by number of input samples, rather
+    % than number of interpolated bins.
+    X = fft( X , C.N.fft ) / C.N.win ;
     
     % Compute spectral magnitude
     X = 2 * abs( X ) ;
     
     % Accumulate spectral magnitude into Welford array
-    dat.( m ).freq = dat.( m ).freq  +  X( subset of freq bins!!! ) ;
+    dat.( m ).freq = dat.( m ).freq  +  X( C.ifreq , : ) ;
     
   end % data modalities
   
