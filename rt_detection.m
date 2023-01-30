@@ -12,12 +12,12 @@
 
 %%% GLOBAL INITIALISATION %%%
 
+% Session's ARCADE config object
+cfg = retrieveConfig ;
+
 % Error log message marking start of task script operations
 logmessage( sprintf( 'Task script rt_detection.m PREP trial %d, %s' , ...
   TrialData.currentTrial , cfg.sessionName ) )
-
-% Session's ARCADE config object
-cfg = retrieveConfig ;
 
 % Condition, block, outcome and reaction time of all previous trials
 pre = getPreviousTrialData ;
@@ -324,8 +324,8 @@ else
     for  F = { 'Psychometric' , 'Reaction Time' } , f = F{ 1 } ;
       
       % Construct graphics object group identifier
-      id = sprintf( '%s Block %d %s %s' , ...
-        f , pre.userVariable{ end - 1 }.BlockType , c.Target , c.Laser ) ;
+      id = sprintf( '%s Block %d %s %s' , f , ...
+        pre.userVariable{ end - 1 }.BlockType , cpre.Target , cpre.Laser );
       
       % Information required to update plots
       index = struct( 'x' , P.tab.( BehaviourXaxis )( P.tab.Condition ==...
@@ -354,42 +354,44 @@ else
       P.bfig.select( 'set' , id )
     end
     
-  % Using synapse
-  if  P.UsingSynapse
-    
-    % Select groups for new block, using id from behaviour set selection
-    if  diff( pre.blocks( end - [ 1 , 0 ] ) )
-      P.bfig.select( 'set' , id )
-    end
-    
-    % Trial was correct or failed so update ephys plots
-    if  ( pre.trialError( end - 1 ) == P.err.Correct || ...
-                          pre.trialError( end - 1 ) == P.err.Failed )
-    
-      % Retrieve buffered data
-      P.buf.spk.getdata( ) ; P.buf.mua.getdata( ) ;
-      if  P.buf.difmualfp , P.buf.lfp.getdata( ) ; end
+  %-- Update electrophysiology plots based on previous trial --%
+  
+    % Using synapse
+    if  P.UsingSynapse
 
-      % Id of block type on previous trial
-      id = sprintf( 'Block %d' , pre.userVariable{ end - 1 }.BlockType ) ;
-
-      % Build name of graphics group to update
-      id = [ id , ' ' , cpre.Target , ' ' , cpre.Laser ] ;
-
-      % Get reaction time, if it exists
-      switch  pre.trialError( end - 1 )
-        case  P.err.Correct , rt = pre.reactionTime( end - 1 ) ;
-        case  P.err.Failed  , rt = [ ] ;
+      % Select groups for new block, using id from behaviour set selection
+      if  diff( pre.blocks( end - [ 1 , 0 ] ) )
+        P.bfig.select( 'set' , id )
       end
 
-      % Update plots
-      P.efig.update( id , [ ] , rt )
-      
-      % Refresh graphics objects for named group
-      P.chlst.Callback( P.chlst , [ ] , id ) ;
-    
-    end % correct/failed
-  end % update ephys plot
+      % Trial was correct or failed so update ephys plots
+      if  ( pre.trialError( end - 1 ) == P.err.Correct || ...
+                            pre.trialError( end - 1 ) == P.err.Failed )
+
+        % Retrieve buffered data
+        P.buf.spk.getdata( ) ; P.buf.mua.getdata( ) ;
+        if  P.buf.difmualfp , P.buf.lfp.getdata( ) ; end
+
+        % Id of block type on previous trial
+        id = sprintf( 'Block %d' , pre.userVariable{ end - 1 }.BlockType );
+
+        % Build name of graphics group to update
+        id = [ id , ' ' , cpre.Target , ' ' , cpre.Laser ] ;
+
+        % Get reaction time, if it exists
+        switch  pre.trialError( end - 1 )
+          case  P.err.Correct , rt = pre.reactionTime( end - 1 ) ;
+          case  P.err.Failed  , rt = [ ] ;
+        end
+
+        % Update plots
+        P.efig.update( id , [ ] , rt )
+
+        % Refresh graphics objects for named group
+        P.chlst.Callback( P.chlst , [ ] , id ) ;
+
+      end % correct/failed
+    end % update ephys plot
     
 end % trial init
 
