@@ -60,7 +60,7 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   
   % X-axis time bins for time plots. Also used to interpolate continuous
   % data down to 1kHz. In milliseconds.
-  C.time = - evar.BaselineMs : evar.ReacTimeMinMs + evar.RespWinWidMs ;
+  C.time = - evar.BufBaselineMs : evar.ReacTimeMinMs + evar.RespWinWidMs ;
   
   % Number of time bins
   C.N.time = numel( C.time ) ;

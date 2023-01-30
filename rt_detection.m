@@ -34,8 +34,8 @@ v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
       RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs , ...
         BehaviourXaxis , TdtHostPC , TdtExperiment , LaserCtrl , ...
           LaserBuffer , LaserSwitch , PowerScaleCoef , NumLaserChanOut ,...
-            TdtChannels , SpikeBuffer , MuaStartIndex , MuaBuffer , ...
-              LfpStartIndex , LfpBuffer , StimRespSim ) ;
+            TdtChannels , BufBaselineMs , SpikeBuffer , MuaStartIndex , ...
+              MuaBuffer , LfpStartIndex , LfpBuffer , StimRespSim ) ;
 
 % Properties of current trial condition. Used in 'Stimulus configuration'.
 c = table2struct(  ...
@@ -49,7 +49,7 @@ c = table2struct(  ...
 if  TrialData.currentTrial == 1
   
   % Define task script shutdown tasks
-  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 8 ) ;
+  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 9 ) ;
   
   % Store local pointer to table defining blocks of trials
   P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
@@ -189,6 +189,9 @@ if  TrialData.currentTrial == 1
     ARCADE_TASK_SCRIPT_SHUTDOWN{ 7 } = ...
       @( ) iset( P.syn , 'RecordingNotes' , 'Note' , footer ) ;
     
+    % Drop Synapse to Idle mode
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) P.syn.setModeStr( 'Idle' ) ;
+    
     % Load up inverse laser transfer functions
     P.invtrans = getlasercoefs( cfg , 'laser_coefs.mat' ) ;
     
@@ -232,11 +235,11 @@ if  TrialData.currentTrial == 1
       % to make sure that we grab the data that we want
       P.extratime = 25 ;
       
-      % Buffer size grabs a 500ms baseline window that ends the moment the
+      % Buffer size grabs a baseline window that ends the moment the
       % laser is triggered. Then adds a window following the onset of the
       % laser signal that ends at the same time point as the response
       % window i.e. the latest allowable saccade onset time.
-      secs = ( BaselineMs  +  ReacTimeMinMs  +  RespWinWidMs  +  ...
+      secs = ( BufBaselineMs  +  ReacTimeMinMs  +  RespWinWidMs  +  ...
         2 * P.extratime ) / 1e3 ;
 
       % For spike buffer, assume no unit will generate above 1000spk/sec.
@@ -268,7 +271,7 @@ if  TrialData.currentTrial == 1
       % Crop buffered data in specified time window around trigger event.
       % Include a few extra milliseconds so that MUA interpolation by
       % onlinefigure does not return NaN.
-      secs = [ -BaselineMs - P.extratime , ...
+      secs = [ -BufBaselineMs - P.extratime , ...
                +ReacTimeMinMs + RespWinWidMs + P.extratime ] / 1e3 ;
       P.buf.spk.settimewin( secs ) ;
       P.buf.mua.settimewin( secs ) ;
@@ -633,7 +636,7 @@ switch  c.ItiStimulus
   
   % Empty Stimulus object
   case  'none' , P.ItiStim.current = P.Target.none ;
-                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) [ ] ;
+                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) [ ] ;
     
   % Randomly selected Mondrian mask
   case  'mondrian'
@@ -645,7 +648,7 @@ switch  c.ItiStimulus
     P.ItiStim.current = Picture( fullfile( P.Mondrian.files( i ).folder,...
       P.Mondrian.files( i ).name ) ) ;
     
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) delete( P.ItiStim.current ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) delete( P.ItiStim.current ) ;
     
   otherwise , error( 'Unrecognised ITI stimulus: %s' , c.ItiStimulus )
 end
