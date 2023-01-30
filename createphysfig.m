@@ -364,6 +364,12 @@ function  dat = fupdate( ~ , dat , ~ , rt )
     T = C.buf.( m ).time .* 1e3 ;
     X = C.buf.( m ).data( : , ichan ) ;
     
+    % TDT buffering error
+    if  isempty( T ) || isempty( X )
+      warning( 'TdtWinBuf %s retrieval error.' )
+      continue
+    end
+    
     % Process data according to its modality
     switch  m
       
