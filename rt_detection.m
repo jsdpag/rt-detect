@@ -19,11 +19,13 @@ cfg = retrieveConfig ;
 logmessage( sprintf( 'Task script rt_detection.m PREP trial %d, %s' , ...
   TrialData.currentTrial , cfg.sessionName ) )
 
+% Gain access to block selection function's global variable and also task
+% script shutdown tasks
+global  ARCADE_BLOCK_SELECTION_GLOBAL ;
+global  ARCADE_TASK_SCRIPT_SHUTDOWN   ;
+
 % Condition, block, outcome and reaction time of all previous trials
 pre = getPreviousTrialData ;
-
-% Gain access to block selection function's global variable
-global  ARCADE_BLOCK_SELECTION_GLOBAL ;
 
 % Error check editable variables
 v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
@@ -45,6 +47,9 @@ c = table2struct(  ...
 
 % First trial of session
 if  TrialData.currentTrial == 1
+  
+  % Define task script shutdown tasks
+  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 8 ) ;
   
   % Store local pointer to table defining blocks of trials
   P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
@@ -108,6 +113,8 @@ if  TrialData.currentTrial == 1
     P.Flicker.stim.faceColor( : ) = double( intmax( 'uint8' ) ) ;
     P.Flicker.stim.width  = P.screensize( 1 ) ;
     P.Flicker.stim.height = P.screensize( 2 ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 1 } = @( ) delete( P.Flicker.stim ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 2 } = @( ) delete( P.Flicker.anim ) ;
   
   % Create target stimulus objects, a bit of trickery required to create an
   % empty Stimulus object for 'none'.
@@ -115,11 +122,15 @@ if  TrialData.currentTrial == 1
   P.Target.gaussian = Gaussian ;
   P.Target.none     = P.Target.gaussian( [ ] ) ;
   
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 3 } = @( ) delete( P.Target.circle   ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 4 } = @( ) delete( P.Target.gaussian ) ;
+  
   % Create fixation point mask, so that the point is stable during flicker
   P.FixMask = Circle ;
   
     P.FixMask.faceColor( : ) = cfg.BackgroundRGB ;
     P.FixMask.diameter = 0.5 * P.pixperdeg ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 5 } = @( ) delete( P.FixMask ) ;
     
   % Create gaze fixation stimulus
   P.Fix = Rectangle ;
@@ -133,6 +144,7 @@ if  TrialData.currentTrial == 1
     P.Fix.width = sqrt( pi * 0.075 ^ 2 ) * P.pixperdeg ;
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 6 } = @( ) delete( P.Fix ) ;
     
     % Base mask values on fixation point
     P.FixMask.position = P.Fix.position ;
@@ -171,6 +183,11 @@ if  TrialData.currentTrial == 1
     
   % Set up SynapseAPI environment if available
   if  P.UsingSynapse
+    
+    % Send end of session message
+    footer = [ 'ARCADE end session ' , cfg.sessionName ] ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 7 } = ...
+      @( ) iset( P.syn , 'RecordingNotes' , 'Note' , footer ) ;
     
     % Load up inverse laser transfer functions
     P.invtrans = getlasercoefs( cfg , 'laser_coefs.mat' ) ;
@@ -616,6 +633,7 @@ switch  c.ItiStimulus
   
   % Empty Stimulus object
   case  'none' , P.ItiStim.current = P.Target.none ;
+                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) [ ] ;
     
   % Randomly selected Mondrian mask
   case  'mondrian'
@@ -626,6 +644,8 @@ switch  c.ItiStimulus
     % Create Picture object to display this file on screen
     P.ItiStim.current = Picture( fullfile( P.Mondrian.files( i ).folder,...
       P.Mondrian.files( i ).name ) ) ;
+    
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) delete( P.ItiStim.current ) ;
     
   otherwise , error( 'Unrecognised ITI stimulus: %s' , c.ItiStimulus )
 end

@@ -29,3 +29,6 @@ sesslaunchparams.Location_ArcadeRemote = 'east' ;
 % Starting positions of EyeLinkServer and EchoServer
 sesslaunchparams.Position_EyeServer  = [  1  , 1 , -1  , -1  ] ;
 sesslaunchparams.Position_EchoServer = [ 871 , 1 , 588 , 647 ] ;
+
+% Execute task script shutdown tasks when ARCADE session terminates
+sesslaunchparams.TaskScript_Shutdown = true ;
