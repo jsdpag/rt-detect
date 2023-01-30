@@ -12,6 +12,10 @@
 
 %%% GLOBAL INITIALISATION %%%
 
+% Error log message marking start of task script operations
+logmessage( sprintf( 'Task script rt_detection.m PREP trial %d, %s' , ...
+  TrialData.currentTrial , cfg.sessionName ) )
+
 % Session's ARCADE config object
 cfg = retrieveConfig ;
 
@@ -586,6 +590,20 @@ Target = P.Target.( c.Target ) ;
       
   end % config targ stim
   
+  % Synapse is in use
+  if  P.UsingSynapse
+    
+    % Set behaviour of laser controller based on visual target type
+    switch  c.Target
+      
+      % No target, so ignore the photodiode
+      case  'none' , P.laserctrl.UsePhotodiode = false ;
+        
+      % Visual target enabled, so syncronise with photodiode
+      otherwise    , P.laserctrl.UsePhotodiode =  true ;
+    end
+  end % using synapse
+  
 % Inter-trial stimulus' handle pointer swap. Previous trials's stimulus is
 % currently being presented, and will be destroyed at the end of the inter-
 % trial-interval that is now being executed.
@@ -692,6 +710,9 @@ elseif  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
         ( ReacTimeMinMs + RespWinWidMs ) )
 
   end % StimRespSim Gizmo
+  
+  % Make sure that laser is triggered
+  P.laserctrl.UseLaser = true ;
   
 % We are connected to TDT Synapse and no laser is needed on next trial
 elseif  P.UsingSynapse  &&  strcmp( c.Laser , 'none' )
@@ -919,6 +940,10 @@ if  ~ isempty( P.ItiStim.previous )
   delete( P.ItiStim.previous )
   P.ItiStim.previous = [ ] ;
 end
+
+% Error log message marking end of task script operations
+logmessage( sprintf( 'Task script rt_detection.m READY trial %d, %s' , ...
+  TrialData.currentTrial , cfg.sessionName ) )
 
 
 %%% END OF TASK SCRIPT %%%
