@@ -24,7 +24,7 @@ sesslaunchparams.EyeServer_UniqueTmp = true ;
 sesslaunchparams.EyeServer_TransferData = false ;
 
 % Place ARCADE remote in upper-right hand corner of screen
-sesslaunchparams.Location_ArcadeRemote = 'northeast' ;
+sesslaunchparams.Location_ArcadeRemote = 'east' ;
 
 % Starting positions of EyeLinkServer and EchoServer
 sesslaunchparams.Position_EyeServer  = [  1  , 1 , -1  , -1  ] ;

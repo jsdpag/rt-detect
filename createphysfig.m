@@ -140,38 +140,22 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   
   %%% Create channel selection list box %%%
   
-  % First, find the ARCADE remote, which is used by this task
-  rh = findobj( 'Type' , 'figure' , 'Tag' , 'remote' ) ;
-  
-  % Make channel selection figure
-  ch = figure( 'MenuBar' , 'none' , 'ToolBar' , 'none' , 'Tag' , ...
-    'Channel' ) ;
-  
-  % We have to show this or else the re-size and -positioning fails
-  drawnow
-  
-  % Shape and ...
-  ch.OuterPosition( 3 ) = rh.OuterPosition( 3 ) ;
-  ch.OuterPosition( 4 ) = rh.Position( 2 ) - fh.OuterPosition( 2 ) - ...
-    fh.OuterPosition( 4 ) ;
-  
-  % ... position the figure
-  ch.Position( 1 ) = rh.Position( 1 ) ;
-  ch.Position( 2 ) = fh.OuterPosition( 2 ) + fh.OuterPosition( 4 ) ;
-  
   % Selection list box
-  chlst = uicontrol( ch , 'Style' , 'listbox' , 'String' , ...
-    arrayfun( @( i ) sprintf( 'Tdt Chan %d' , i ), 1 : C.N.chan,...
+  chlst = uicontrol( fh , 'Style' , 'listbox' , 'String' , ...
+    arrayfun( @( i ) sprintf( 'Tdt Ch%d' , i ), 1 : C.N.chan,...
       'UniformOutput' , false ), 'Callback', @lstbox_cb, ...
         'UserData' , ofig , 'Tag', 'chansel' ) ;
-      
-  % There is only one channel, so disable this list box
-  if  C.N.chan == 1 , chlst.Callback = [ ] ; end
   
   % Position box
   chlst.Units = 'normalized' ;
-  chlst.Position( 1 : 2 ) = 0.025 ;
-  chlst.Position( 3 : 4 ) = 0.950 ;
+  chlst.Position( 3 ) = 1.1 * chlst.Position( 3 ) ;
+  chlst.Position( 1 ) = 1 - chlst.Position( 3 ) ;
+  chlst.Position( 2 ) = 0 ;
+  chlst.Position( 4 ) = 1 ;
+  
+  % Get horizontal shift for data plots, in pixels
+  chlst.Units = 'pixels' ;
+  dx = chlst.Position( 3 ) / 2 ;
   
   
   %%% Create axes %%%
@@ -186,7 +170,11 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
     for  D = C.domain ; d = D{ 1 } ; i = i + 1 ; tag = [ m , d ] ;
       
       % Make new axes
-      ax = ofig.subplot( 3 , 2 , i , 'XTick', C.xtick.( d ), 'Tag', tag ) ;
+      ax = ofig.subplot( 3 , 2 , i , 'XTick' , C.xtick.( d ) , ...
+        'Units' , 'pixels' , 'Tag' , tag ) ;
+      
+      % Apply horizontal shift away from channel list box
+      ax.Position( 1 ) = ax.Position( 1 ) - dx ;
       
       % Clear x-tick labels on all but bottom plots, which have axis labels
       if  i < 5 , ax.XTickLabel = [] ; else, xlabel( ax , L.X.( d ) ), end
@@ -201,7 +189,7 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   %%% Colour name to RGB map %%%
   
   % Axes all have the same default ColorOrder set, point to one of them
-  col = fh.Children( 1 ).ColorOrder ;
+  col = fh.Children( end ).ColorOrder ;
   
   % Define a struct mapping field names to corresponding RGB values
   col = struct( 'green' , col( 5 , : ) , ...
@@ -365,8 +353,8 @@ function  dat = fupdate( ~ , dat , ~ , rt )
   % Data modalities name, and channel starting index
   for  M = C.modality ; m = M{ 1 } ; ichan = C.ichan.( m ) ;
     
-    % Get buffered time stamps and data values
-    T = C.buf.( m ).time ;
+    % Get buffered time stamps (sec --> millisec) and data values
+    T = C.buf.( m ).time .* 1e3 ;
     X = C.buf.( m ).data( : , ichan ) ;
     
     % Process data according to its modality
@@ -494,6 +482,7 @@ function  lstbox_cb( lb , ~ , id )
     switch  d
       case 'time' , return
       case 'freq' , a = 20 * log10( a ) ;
+                    a( isinf( a ) ) = NaN ;
     end
   end
   
