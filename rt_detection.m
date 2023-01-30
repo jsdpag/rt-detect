@@ -706,6 +706,10 @@ elseif  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
   % StimRespSim Gizmo in use
   if  P.simresp
     
+    % Enable FB128 sync line according to laser type
+    iset( P.syn , StimRespSim , 'Enable' , ...
+      double( strcmp( c.Laser , 'test' ) ) )
+    
     % Duration of high-state is proportional to x-axis variable
     iset( P.syn , StimRespSim , 'ResponseMs' , ...
       ( c.( BehaviourXaxis ) - P.xmin ) / P.xrng  *  ...
@@ -722,6 +726,9 @@ elseif  P.UsingSynapse  &&  strcmp( c.Laser , 'none' )
   % Make sure that laser is disabled
   P.laserctrl.UseLaser = false ;
   P.laserbuff.Signal   =     0 ;
+  
+  % Make sure that FB128 sync line stays low
+  if  P.simresp , iset( P.syn , StimRespSim , 'Enable' , 0 ) ; end
   
 % We should never get here
 else
