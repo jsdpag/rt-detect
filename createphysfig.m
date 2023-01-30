@@ -316,7 +316,6 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   
   % Show thine creations
   fh.Visible = 'on' ;
-  ch.Visible = 'on' ;
   
 end % createphysfig
 
@@ -333,13 +332,21 @@ function  dat = fupdate( ~ , dat , ~ , rt )
   % Point to constants
   C = dat.C ;
   
-  % Reaction time is not given, take last data point.
+  % Reaction time is not given.
   if  isempty( rt )  ||  ~ isscalar( rt )  ||  ~ isnumeric( rt )
+    
+    % Take data up to the last time bin. No indexing required.
     rt = C.time( end ) ;
+     i = [ ] ;
+     
+  % Reaction time provided
   else
-    rt = floor( rt ) ; % Guarantee integer value
-    rt = min( rt , C.time( end ) ) ; % Guarantee maximum RT value
-  end
+    
+    rt = floor( rt ) ; % Guarantee integer value.
+    rt = min( rt , C.time( end ) ) ; % Guarantee maximum RT value.
+     i = C.time < rt ; % Accumulate into a subset of Welford array.
+     
+  end % interpret rt input arg
   
   % Get milliseconds inside time window
   w = rt - C.N.win : rt - 1 ;
@@ -400,7 +407,11 @@ function  dat = fupdate( ~ , dat , ~ , rt )
     end % process neural data
     
     % Accumulate time series data into existing Welford array
-    dat.( m ).time = dat.( m ).time  +  X ;
+    if  isempty( i )
+      dat.( m ).time = dat.( m ).time  +  X ;
+    else
+      dat.( m ).time( i , : ) = dat.( m ).time( i , : )  +  X( i , : ) ;
+    end
     
     % Windowed time domain data, apply Hann window
     X = X( w , : )  .*  C.hann ;
