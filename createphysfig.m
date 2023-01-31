@@ -348,6 +348,7 @@ function  dat = fupdate( ~ , dat , ~ , rt )
   else
     
     rt = floor( rt ) ; % Guarantee integer value.
+    rt = max( rt , C.time( min( C.N.win + 1 , end ) ) ) ; %Guarantee min RT
     rt = min( rt , C.time( end ) ) ; % Guarantee maximum RT value.
      i = C.time < rt ; % Accumulate into a subset of Welford array.
      
