@@ -29,8 +29,8 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   % Axis labels
   L.X.time = 'Time from target on (ms)' ;
   L.X.freq = 'Frequency (Hz)' ;
-  L.Y.time = 'Avg. +/-SEM' ;
-  L.Y.freq = 'dBV(Avg.+/-SEM)' ;
+  L.Y.time = '' ;
+  L.Y.freq = 'dBV ' ;
   
   % Data modalities, name strings
   C.modality = { 'spk' , 'mua' , 'lfp' } ;
@@ -171,16 +171,21 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
       
       % Make new axes
       ax = ofig.subplot( 3 , 2 , i , 'XTick' , C.xtick.( d ) , ...
-        'Units' , 'pixels' , 'Tag' , tag ) ;
+        'Units' , 'pixels' , 'XGrid' , 'on' , 'Tag' , tag ) ;
       
       % Apply horizontal shift away from channel list box
       ax.Position( 1 ) = ax.Position( 1 ) - dx ;
+      
+      % Titles
+      if     i == 1 , title( cfg.sessionName )
+      elseif i == 2 , title( 'Avg. +/- SEM' )
+      end
       
       % Clear x-tick labels on all but bottom plots, which have axis labels
       if  i < 5 , ax.XTickLabel = [] ; else, xlabel( ax , L.X.( d ) ), end
       
       % Set y-axis label on bottom plots
-      if  i >= 5 , ylabel( ax , L.Y.( d ) ) , end
+      ylabel( ax , [ L.Y.( d ) , m ] )
       
     end % modality
   end % domain
