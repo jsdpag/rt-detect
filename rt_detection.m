@@ -10,6 +10,7 @@
 % Total power = LaserMaxPowerPerChan_mW * PowerScaleCoef * NumLaserChanOut
 % 
 
+
 %%% GLOBAL INITIALISATION %%%
 
 % Session's ARCADE config object
@@ -48,8 +49,27 @@ c = table2struct(  ...
 % First trial of session
 if  TrialData.currentTrial == 1
   
+  % Extra toolboxes required by this task
+  PATHS = { 'TDTMatlabSDK' , 'mak' , 'laser-signals' , ...
+            'tdt-windowed-buffering' } ;
+  GENPAT = { 'TDTMatlabSDK' } ;
+
+  % Toolboxes , get absolute path
+  for  TB = PATHS , tb = [ 'C:\Toolbox\' , TB{ 1 } ] ;
+    
+    % Cannot find Toolbox, report error to user
+    if  ~ exist( tb , 'dir' ), error( 'Cannot find Toolbox: %s' , tb ), end
+    
+    % Expand recursively into toolbox sub-directories
+    if  any( strcmp( TB{ 1 } , GENPAT ) ) , tb = genpath( tb ) ; end
+    
+    % Add to path
+    addpath( tb )
+    
+  end % toolboxes
+  
   % Define task script shutdown tasks
-  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 9 ) ;
+  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 10 ) ;
   
   % Store local pointer to table defining blocks of trials
   P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
@@ -308,6 +328,12 @@ if  TrialData.currentTrial == 1
     [ P.efig , P.chlst ] = createphysfig( cfg , v , P.tab , P.buf ) ;
     
   end % synapse api actions
+  
+  % Try to guarantee that user has time to look at online plots
+  ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) waitfor( msgbox( ...
+    [ '\fontsize{14.123}Examine plots.', newline, 'Hit OK when done.' ],...
+      'rt_detection.m', 'none', struct( 'WindowStyle', 'non-modal', ...
+        'Interpreter' , 'tex' ) ) ) ;
   
 % All subsequent trials
 else
@@ -636,7 +662,7 @@ switch  c.ItiStimulus
   
   % Empty Stimulus object
   case  'none' , P.ItiStim.current = P.Target.none ;
-                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) [ ] ;
+                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = @( ) [ ] ;
     
   % Randomly selected Mondrian mask
   case  'mondrian'
@@ -648,7 +674,7 @@ switch  c.ItiStimulus
     P.ItiStim.current = Picture( fullfile( P.Mondrian.files( i ).folder,...
       P.Mondrian.files( i ).name ) ) ;
     
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) delete( P.ItiStim.current ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = @( ) delete( P.ItiStim.current ) ;
     
   otherwise , error( 'Unrecognised ITI stimulus: %s' , c.ItiStimulus )
 end
