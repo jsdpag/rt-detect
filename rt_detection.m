@@ -381,7 +381,7 @@ else
 
       % Select groups for new block, using id from behaviour set selection
       if  diff( pre.blocks( end - [ 1 , 0 ] ) )
-        P.bfig.select( 'set' , id )
+        P.efig.select( 'set' , id )
       end
 
       % Trial was correct or failed so update ephys plots

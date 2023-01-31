@@ -213,8 +213,8 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   
   % Selection and unselection parameter cell arrays. Outer cell is ordered
   % [ data , error bars ], inner cell contains parameters.
-  selpar = { { 'Color' , col.blue , 'LineWidth' , 1.3 } ;
-             { 'Color' , col.blue , 'LineWidth' , 1.3 , ...
+  selpar = { { 'Color' , col.blue , 'LineWidth' , 1.5 } ;
+             { 'Color' , col.blue , 'LineWidth' , 0.5 , ...
                'Visible' , 'on' } } ;
   unspar = { { 'Color' , col.lgrey , 'LineWidth' , 0.5 } ;
              { 'Visible' , 'off' } } ;
@@ -312,7 +312,7 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   %%% Done %%%
   
   % Apply formatting through selection of first block, by default
-  ofig.select( 'group' , ofig.grp( 1 ).id )
+  ofig.select( 'set' , ofig.grp( 1 ).set )
   
   % Show thine creations
   fh.Visible = 'on' ;
