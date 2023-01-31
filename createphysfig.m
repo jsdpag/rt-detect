@@ -206,6 +206,7 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   % Map colours to target and laser types from table 'Target' and 'Laser'
   col.Target.none     = col.blue   ;
   col.Target.gaussian = col.green  ;
+  col.Target.circle   = col.green  ;
    col.Laser.none     = col.blue   ;
    col.Laser.test     = col.green  ;
    col.Laser.control  = col.yellow ;

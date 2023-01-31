@@ -637,6 +637,12 @@ Target = P.Target.( c.Target ) ;
   switch  c.Target
     
     case  'none' % no action required
+        
+    case  'circle'
+      
+      Target.position = mirror .* [ vpix.RfXDeg , vpix.RfYDeg ] ;
+      Target.diameter = 2 * vpix.RfRadDeg * RfTargetFactor ;
+      Target.faceColor( : ) = Weber( c.Contrast , WaitBak{ 2 } ) ;
       
     case  'gaussian'
       
