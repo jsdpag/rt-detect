@@ -426,8 +426,14 @@ function  dat = fupdate( ~ , dat , ~ , rt )
       dat.( m ).time( i , : ) = dat.( m ).time( i , : )  +  X( i , : ) ;
     end
     
-    % Windowed time domain data, apply Hann window
-    X = X( w , : )  .*  C.hann ;
+    % Windowed time domain data
+    X = X( w , : ) ;
+    
+    % Remove DC component
+    X = X - mean( X , 1 ) ;
+    
+    % Apply Hann window
+    X = X  .*  C.hann ;
     
     % Get fourier transform, normalise by number of input samples, rather
     % than number of interpolated bins.
