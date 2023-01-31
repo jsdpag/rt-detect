@@ -999,6 +999,10 @@ if  ~ isempty( P.ItiStim.previous )
   P.ItiStim.previous = [ ] ;
 end
 
+% Report actual ITI in milliseconds
+EchoServer.Write( '%9sITI %dms\n' , '' , ...
+  ceil( 1e3 * toc( P.ITIstart.value ) ) )
+
 % Error log message marking end of task script operations
 logmessage( sprintf( 'Task script rt_detection.m READY trial %d, %s' , ...
   TrialData.currentTrial , cfg.sessionName ) )
