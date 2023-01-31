@@ -759,10 +759,17 @@ elseif  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
     iset( P.syn , StimRespSim , 'Enable' , ...
       double( strcmp( c.Laser , 'test' ) ) )
     
+    % Maximum response duration
+    MaxDurMs = ReacTimeMinMs + RespWinWidMs ;
+    
+    % Compute duration of response
+    ResponseMs = ( c.( BehaviourXaxis ) - P.xmin ) / P.xrng  *  MaxDurMs ;
+    
+    % Compute latency to response
+    iset( P.syn , StimRespSim , 'LatencyMs' , MaxDurMs - ResponseMs )
+    
     % Duration of high-state is proportional to x-axis variable
-    iset( P.syn , StimRespSim , 'ResponseMs' , ...
-      ( c.( BehaviourXaxis ) - P.xmin ) / P.xrng  *  ...
-        ( ReacTimeMinMs + RespWinWidMs ) )
+    iset( P.syn , StimRespSim , 'ResponseMs' , ResponseMs )
 
   end % StimRespSim Gizmo
   
