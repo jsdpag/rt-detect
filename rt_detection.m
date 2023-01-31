@@ -70,7 +70,7 @@ if  TrialData.currentTrial == 1
   end % toolboxes
   
   % Define task script shutdown tasks
-  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 11 ) ;
+  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 12 ) ;
   
   % Store local pointer to table defining blocks of trials
   P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
@@ -141,27 +141,33 @@ if  TrialData.currentTrial == 1
   
   % Create target stimulus objects, a bit of trickery required to create an
   % empty Stimulus object for 'none'.
+  P.Target.bar      = Rectangle ;
   P.Target.circle   = Circle ;
   P.Target.gaussian = Gaussian ;
   P.Target.none     = P.Target.gaussian( [ ] ) ;
   P.Target.anim     = Flash ;
   
+    % Bar height i.e. thickness is fixed at the same default value as in
+    % bar_mapping_cfg.mat of the bar.mapping ARCADE task repository
+    P.Target.bar.height = 0.125 * P.pixperdeg ;
+    
     % Fix animation terminal actions. Stop painting stimulus. And flip
     % value of photodiode square. Beware, target 'visible' property is not
     % changed.
     P.Target.anim.terminalAction = '00000101' ;
     
     % Kill objects at session end
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 3 } = @( ) delete( P.Target.circle   ) ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 4 } = @( ) delete( P.Target.gaussian ) ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 5 } = @( ) delete( P.Target.anim     ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 3 } = @( ) delete( P.Target.bar      ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 4 } = @( ) delete( P.Target.circle   ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 5 } = @( ) delete( P.Target.gaussian ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 6 } = @( ) delete( P.Target.anim     ) ;
   
   % Create fixation point mask, so that the point is stable during flicker
   P.FixMask = Circle ;
   
     P.FixMask.faceColor( : ) = cfg.BackgroundRGB ;
     P.FixMask.diameter = 0.5 * P.pixperdeg ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 6 } = @( ) delete( P.FixMask ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 7 } = @( ) delete( P.FixMask ) ;
     
   % Create gaze fixation stimulus
   P.Fix = Rectangle ;
@@ -175,7 +181,7 @@ if  TrialData.currentTrial == 1
     P.Fix.width = sqrt( pi * 0.075 ^ 2 ) * P.pixperdeg ;
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 7 } = @( ) delete( P.Fix ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) delete( P.Fix ) ;
     
     % Base mask values on fixation point
     P.FixMask.position = P.Fix.position ;
@@ -217,11 +223,11 @@ if  TrialData.currentTrial == 1
     
     % Send end of session message
     footer = [ 'ARCADE end session ' , cfg.sessionName ] ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = ...
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = ...
       @( ) iset( P.syn , 'RecordingNotes' , 'Note' , footer ) ;
     
     % Drop Synapse to Idle mode
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) P.syn.setModeStr( 'Idle' ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = @( ) P.syn.setModeStr( 'Idle' ) ;
     
     % Load up inverse laser transfer functions
     P.invtrans = getlasercoefs( cfg , 'laser_coefs.mat' ) ;
@@ -341,7 +347,7 @@ if  TrialData.currentTrial == 1
   end % synapse api actions
   
   % Try to guarantee that user has time to look at online plots
-  ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = @( ) waitfor( msgbox( ...
+  ARCADE_TASK_SCRIPT_SHUTDOWN{ 11 } = @( ) waitfor( msgbox( ...
     [ '\fontsize{14.123}Examine plots.', newline, 'Hit OK when done.' ],...
       'rt_detection.m', 'none', struct( 'WindowStyle', 'non-modal', ...
         'Interpreter' , 'tex' ) ) ) ;
@@ -638,6 +644,13 @@ Target = P.Target.( c.Target ) ;
     
     case  'none' % no action required
         
+    case  'bar'
+      
+      Target.position = mirror .* [ vpix.RfXDeg , vpix.RfYDeg ] ;
+      Target.width = 2 * vpix.RfRadDeg * RfTargetFactor ;
+      Target.angle = RfAngleDeg ;
+      Target.faceColor( : ) = Weber( c.Contrast , WaitBak{ 2 } ) ;
+      
     case  'circle'
       
       Target.position = mirror .* [ vpix.RfXDeg , vpix.RfYDeg ] ;
@@ -708,7 +721,7 @@ switch  c.ItiStimulus
   
   % Empty Stimulus object
   case  'none' , P.ItiStim.current = P.Target.none ;
-                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 11 } = @( ) [ ] ;
+                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 12 } = @( ) [ ] ;
     
   % Randomly selected Mondrian mask
   case  'mondrian'
@@ -720,7 +733,7 @@ switch  c.ItiStimulus
     P.ItiStim.current = Picture( fullfile( P.Mondrian.files( i ).folder,...
       P.Mondrian.files( i ).name ) ) ;
     
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 11 } = @( ) delete( P.ItiStim.current ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 12 } = @( ) delete( P.ItiStim.current ) ;
     
   otherwise , error( 'Unrecognised ITI stimulus: %s' , c.ItiStimulus )
 end
@@ -1124,7 +1137,7 @@ function  tab = tabvalchk( tab , cstrreg )
   sup.ItiStimulus = { 'none' , 'mondrian' } ;
   sup.WaitBackground = { 'default' , 'red' , 'black' } ;
   sup.BackgroundFlickerHz = [ 0 , round( StimServer.GetFrameRate ) / 2 ] ;
-  sup.Target = { 'none' , 'gaussian' , 'circle' } ;
+  sup.Target = { 'none' , 'gaussian' , 'circle' , 'bar' } ;
   sup.Contrast = [ -1 , +1 ] ;
   sup.Mirror = { 'off' , 'on' } ;
   sup.Laser = { 'none' , 'test' , 'control' } ;
