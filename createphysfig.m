@@ -66,7 +66,7 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   C.N.time = numel( C.time ) ;
   
   % Size of time window for Fourier transform, in milliseconds
-  C.N.win = 200 ;
+  C.N.win = 250 ;
   
   % fft interpolation, producing this many frequency bins
   C.N.fft = 1e3 ;

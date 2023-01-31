@@ -734,6 +734,9 @@ elseif  P.UsingSynapse  &&  ~ strcmp( c.Laser , 'none' )
       
     % Increasing linear envelope
     case  'linear+' , X = ( 1 : N ) ./ N  .*  X ;
+    
+    % Uniformly distributed random noise
+    case  'uniform' , X = rand( 1 , N ) .* X ; 
       
     % We should not ever get here
     otherwise , error( 'LaserEnvelope programming error.' )
@@ -1082,7 +1085,7 @@ function  tab = tabvalchk( tab , cstrreg )
   sup.LaserFreqHz = [ 0 , 200 ] ;
   sup.LaserPhaseDeg = [ -Inf , +Inf ] ;
   sup.LaserMaxPowerPerChan_mW = [ 0 , 20 ] ;
-  sup.LaserEnvelope = { 'none' , 'linear+' } ;
+  sup.LaserEnvelope = { 'none' , 'linear+' , 'uniform' } ;
   
   % Support check function
   supchk.ItiStimulus = fstrsup ;
