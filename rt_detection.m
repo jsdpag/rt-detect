@@ -29,14 +29,15 @@ global  ARCADE_TASK_SCRIPT_SHUTDOWN   ;
 pre = getPreviousTrialData ;
 
 % Error check editable variables
-v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfWinFactor , ...
-  RfTargetFactor , FixTolDeg , TrainingMode , BaselineMs , WaitAvgMs , ...
-    WaitMaxProb , ReacTimeMinMs , RespWinWidMs , RewardSlope , ...
-      RewardMinMs , RewardFailFrac , ScreenGamma , ItiMinMs , ...
-        BehaviourXaxis , TdtHostPC , TdtExperiment , LaserCtrl , ...
-          LaserBuffer , LaserSwitch , PowerScaleCoef , NumLaserChanOut ,...
-            TdtChannels , BufBaselineMs , SpikeBuffer , MuaStartIndex , ...
-              MuaBuffer , LfpStartIndex , LfpBuffer , StimRespSim ) ;
+v = evarchk( RewardMaxMs , RfXDeg , RfYDeg , RfRadDeg , RfAngleDeg , ...
+      RfWinFactor , TargetTimeMs , RfTargetFactor , FixTolDeg , ...
+      TrainingMode , BaselineMs , WaitAvgMs , WaitMaxProb , ...
+      ReacTimeMinMs , RespWinWidMs , RewardSlope , RewardMinMs , ...
+      RewardFailFrac , ScreenGamma , ItiMinMs , BehaviourXaxis , ...
+      TdtHostPC , TdtExperiment , LaserCtrl , LaserBuffer , LaserSwitch,...
+      PowerScaleCoef , NumLaserChanOut , TdtChannels , BufBaselineMs , ...
+      SpikeBuffer , MuaStartIndex , MuaBuffer , LfpStartIndex , ...
+      LfpBuffer , StimRespSim ) ;
 
 % Properties of current trial condition. Used in 'Stimulus configuration'.
 c = table2struct(  ...
@@ -69,7 +70,7 @@ if  TrialData.currentTrial == 1
   end % toolboxes
   
   % Define task script shutdown tasks
-  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 10 ) ;
+  ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 11 ) ;
   
   % Store local pointer to table defining blocks of trials
   P.tab = ARCADE_BLOCK_SELECTION_GLOBAL.tab ;
@@ -133,6 +134,8 @@ if  TrialData.currentTrial == 1
     P.Flicker.stim.faceColor( : ) = double( intmax( 'uint8' ) ) ;
     P.Flicker.stim.width  = P.screensize( 1 ) ;
     P.Flicker.stim.height = P.screensize( 2 ) ;
+    
+    % Kill objects at session end
     ARCADE_TASK_SCRIPT_SHUTDOWN{ 1 } = @( ) delete( P.Flicker.stim ) ;
     ARCADE_TASK_SCRIPT_SHUTDOWN{ 2 } = @( ) delete( P.Flicker.anim ) ;
   
@@ -141,16 +144,24 @@ if  TrialData.currentTrial == 1
   P.Target.circle   = Circle ;
   P.Target.gaussian = Gaussian ;
   P.Target.none     = P.Target.gaussian( [ ] ) ;
+  P.Target.anim     = Flash ;
   
+    % Fix animation terminal actions. Stop painting stimulus. And flip
+    % value of photodiode square. Beware, target 'visible' property is not
+    % changed.
+    P.Target.anim.terminalAction = '00000101' ;
+    
+    % Kill objects at session end
     ARCADE_TASK_SCRIPT_SHUTDOWN{ 3 } = @( ) delete( P.Target.circle   ) ;
     ARCADE_TASK_SCRIPT_SHUTDOWN{ 4 } = @( ) delete( P.Target.gaussian ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 5 } = @( ) delete( P.Target.anim     ) ;
   
   % Create fixation point mask, so that the point is stable during flicker
   P.FixMask = Circle ;
   
     P.FixMask.faceColor( : ) = cfg.BackgroundRGB ;
     P.FixMask.diameter = 0.5 * P.pixperdeg ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 5 } = @( ) delete( P.FixMask ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 6 } = @( ) delete( P.FixMask ) ;
     
   % Create gaze fixation stimulus
   P.Fix = Rectangle ;
@@ -164,7 +175,7 @@ if  TrialData.currentTrial == 1
     P.Fix.width = sqrt( pi * 0.075 ^ 2 ) * P.pixperdeg ;
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 6 } = @( ) delete( P.Fix ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 7 } = @( ) delete( P.Fix ) ;
     
     % Base mask values on fixation point
     P.FixMask.position = P.Fix.position ;
@@ -206,11 +217,11 @@ if  TrialData.currentTrial == 1
     
     % Send end of session message
     footer = [ 'ARCADE end session ' , cfg.sessionName ] ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 7 } = ...
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = ...
       @( ) iset( P.syn , 'RecordingNotes' , 'Note' , footer ) ;
     
     % Drop Synapse to Idle mode
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) P.syn.setModeStr( 'Idle' ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) P.syn.setModeStr( 'Idle' ) ;
     
     % Load up inverse laser transfer functions
     P.invtrans = getlasercoefs( cfg , 'laser_coefs.mat' ) ;
@@ -330,7 +341,7 @@ if  TrialData.currentTrial == 1
   end % synapse api actions
   
   % Try to guarantee that user has time to look at online plots
-  ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) waitfor( msgbox( ...
+  ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = @( ) waitfor( msgbox( ...
     [ '\fontsize{14.123}Examine plots.', newline, 'Hit OK when done.' ],...
       'rt_detection.m', 'none', struct( 'WindowStyle', 'non-modal', ...
         'Interpreter' , 'tex' ) ) ) ;
@@ -632,11 +643,40 @@ Target = P.Target.( c.Target ) ;
       Target.position = mirror .* [ vpix.RfXDeg , vpix.RfYDeg ] ;
       Target.sdx = vpix.RfRadDeg * RfTargetFactor ;
       Target.sdy = Target.sdx ;
+      Target.angle = RfAngleDeg ;
       Target.color( : ) = Weber( c.Contrast , WaitBak{ 2 } ) ;
       
     otherwise , error( 'Unrecognised target stimulus: %s' , c.Target )
       
   end % config targ stim
+  
+  % There is a visual target
+  if  ~ strcmp( c.Target , 'none' )
+    
+    % Non-zero target time specified, TargetTimeFrames holds temp value
+    if  TargetTimeMs
+      
+      TargetTimeFrames = TargetTimeMs ;
+      
+    % Match the flash duration to the longest possible reaction time
+    elseif  TargetTimeMs == 0
+      
+      TargetTimeFrames = ReacTimeMinMs + RespWinWidMs ;
+      
+    % We should never get here
+    else , error( 'Programming error, TargetTimeMs' ) 
+    end
+    
+    % Convert from ms to frames
+    TargetTimeFrames = ceil( TargetTimeFrames / 1e3 * P.framerate ) ;
+    
+    % Assign number of frames to target flash animation
+    P.Target.anim.nFrames = TargetTimeFrames ;
+    
+    % Re-assign animation to stimulus object
+    Target.play_animation( P.Target.anim ) ;
+    
+  end % flash
   
   % Synapse is in use
   if  P.UsingSynapse
@@ -662,7 +702,7 @@ switch  c.ItiStimulus
   
   % Empty Stimulus object
   case  'none' , P.ItiStim.current = P.Target.none ;
-                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = @( ) [ ] ;
+                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 11 } = @( ) [ ] ;
     
   % Randomly selected Mondrian mask
   case  'mondrian'
@@ -674,7 +714,7 @@ switch  c.ItiStimulus
     P.ItiStim.current = Picture( fullfile( P.Mondrian.files( i ).folder,...
       P.Mondrian.files( i ).name ) ) ;
     
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = @( ) delete( P.ItiStim.current ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 11 } = @( ) delete( P.ItiStim.current ) ;
     
   otherwise , error( 'Unrecognised ITI stimulus: %s' , c.ItiStimulus )
 end
