@@ -256,14 +256,26 @@ if  TrialData.currentTrial == 1
       % Attempt to use 1000Hz output sampling rate
       P.laserbuff.FsTarget = 1e3 ;
     
+    % Pre-allocate empty arrays for buffers
+    P.buf = struct( 'spk' , [ ] , 'mua' , [ ] , 'lfp' , [ ] ) ;
+    
+    % Raise flags when buffer Gizmo name is other than 'none'
+    P.flg.spk = ~ strcmpi( SpikeBuffer , 'none' ) ;
+    P.flg.mua = ~ strcmpi(   MuaBuffer , 'none' ) ;
+    P.flg.lfp = ~ strcmpi(   LfpBuffer , 'none' ) ;
+    
     % MUA and LFP signals are in the different buffer Gizmos
     P.buf.difmualfp = ~ strcmp( MuaBuffer , LfpBuffer ) ;
     
     % Create triggered buffer MATLAB objects
-    P.buf.spk = TdtWinBuf( P.syn , SpikeBuffer ) ;
-    P.buf.mua = TdtWinBuf( P.syn ,   MuaBuffer ) ;
-    if  P.buf.difmualfp , P.buf.lfp = TdtWinBuf( P.syn , LfpBuffer ) ;
-    else                , P.buf.lfp = P.buf.mua ;
+    if  P.flg.spk , P.buf.spk = TdtWinBuf( P.syn , SpikeBuffer ) ; end
+    if  P.flg.mua , P.buf.mua = TdtWinBuf( P.syn ,   MuaBuffer ) ; end
+    if  P.flg.lfp
+      if  P.buf.difmualfp
+        P.buf.lfp = TdtWinBuf( P.syn , LfpBuffer ) ;
+      else
+        P.buf.lfp = P.buf.mua ;
+      end
     end
     
       %- Set fixed buffer parameters -%
@@ -289,12 +301,12 @@ if  TrialData.currentTrial == 1
       secs = ( ReacTimeMinMs  +  RespWinWidMs  +  P.extratime ) / 1e3 ;
 
       % Again, assume no spike rate above 1000spk/sec
-      P.buf.spk.setrespwin( secs , 1000 ) ;
-      P.buf.mua.setrespwin( secs ) ;
-      if  P.buf.difmualfp , P.buf.lfp.setrespwin( secs ) ; end
+      if  P.flg.spk , P.buf.spk.setrespwin( secs , 1000 ) ; end
+      if  P.flg.mua , P.buf.mua.setrespwin( secs )        ; end
+      if  P.flg.lfp && P.buf.difmualfp , P.buf.lfp.setrespwin( secs ) ; end
       
       % Maximum number of channels to return following each buffer read
-      P.buf.spk.setchsubsel( TdtChannels ) ;
+      if  P.flg.spk , P.buf.spk.setchsubsel( TdtChannels ) ; end
       
         % Number of channels to return from MUA/LFP buffer(s). This changes
         % depending on whether both data types have the same buffer or not.
@@ -302,17 +314,18 @@ if  TrialData.currentTrial == 1
           max( [ MuaStartIndex , LfpStartIndex ]  +  TdtChannels  -  1 ) ;
       
         % Always assign to MUA buffer, conditionally to LFP buffer
-        P.buf.mua.setchsubsel( tdtchan ) ;
-        if  P.buf.difmualfp , P.buf.lfp.setchsubsel( tdtchan ) ; end
+        if  P.flg.mua , P.buf.mua.setchsubsel( tdtchan ) ; end
+        if  P.flg.lfp && P.buf.difmualfp, P.buf.lfp.setchsubsel( tdtchan );
+        end
 
       % Crop buffered data in specified time window around trigger event.
       % Include a few extra milliseconds so that MUA interpolation by
       % onlinefigure does not return NaN.
       secs = [ -BufBaselineMs - P.extratime , ...
                +ReacTimeMinMs + RespWinWidMs + P.extratime ] / 1e3 ;
-      P.buf.spk.settimewin( secs ) ;
-      P.buf.mua.settimewin( secs ) ;
-      if  P.buf.difmualfp , P.buf.lfp.settimewin( secs ) ; end
+      if  P.flg.spk , P.buf.spk.settimewin( secs ) ; end
+      if  P.flg.mua , P.buf.mua.settimewin( secs ) ; end
+      if  P.flg.lfp && P.buf.difmualfp , P.buf.lfp.settimewin( secs ) ; end
 
     % Simulated ephys signal modulation via FB128 Sync line is enabled
     P.simresp = ~ strcmpi( StimRespSim , 'none' ) ;
@@ -420,7 +433,7 @@ else
   %-- Update electrophysiology plots based on previous trial --%
   
     % Using synapse
-    if  P.UsingSynapse
+    if  P.UsingSynapse  &&  ~ isempty( P.efig )
 
       % Select groups for new block, using id from behaviour set selection
       if  diff( pre.blocks( end - [ 1 , 0 ] ) )
@@ -432,8 +445,9 @@ else
                             pre.trialError( end - 1 ) == P.err.Failed )
 
         % Retrieve buffered data
-        P.buf.spk.getdata( ) ; P.buf.mua.getdata( ) ;
-        if  P.buf.difmualfp , P.buf.lfp.getdata( ) ; end
+        if  P.flg.spk , P.buf.spk.getdata( ) ; end
+        if  P.flg.mua , P.buf.mua.getdata( ) ; end
+        if  P.flg.lfp && P.buf.difmualfp , P.buf.lfp.getdata( ) ; end
 
         % Id of block type on previous trial
         id = sprintf( 'Block %d' , pre.userVariable{ end - 1 }.BlockType );

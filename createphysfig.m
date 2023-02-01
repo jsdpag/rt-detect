@@ -32,11 +32,22 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   L.Y.time = '' ;
   L.Y.freq = 'dB ' ;
   
+  % Pointers to buffer objects
+  C.buf = buf ;
+  
+  % Remove empty fields
+  for  M = fieldnames( C.buf )' ; m = M{ 1 } ;
+    if  isempty( C.buf.( m ) ) , C.buf = rmfield( C.buf , m ) ; end
+  end
+  
   % Data modalities, name strings
-  C.modality = { 'spk' , 'mua' , 'lfp' } ;
+  C.modality = fieldnames( C.buf )' ;
   
   % Number of data modalities
   C.N.modality = numel( C.modality ) ;
+  
+    % No TdtWinBuf objects provided, so ephys plots are not possible
+    if  C.N.modality == 0 , ofig = [ ] ; chlst = [ ] ; return , end
   
   % Data domains
   C.domain = { 'time' , 'freq' } ;
@@ -46,9 +57,6 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   
   % Number of TDT channels
   C.N.chan = evar.TdtChannels ;
-  
-  % Pointers to buffer objects
-  C.buf = buf ;
   
   % Remember modality specific channel indices for data buffers
   C.ichan.spk = 1 : C.N.chan ;
@@ -170,8 +178,9 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
     for  D = C.domain ; d = D{ 1 } ; i = i + 1 ; tag = [ m , d ] ;
       
       % Make new axes
-      ax = ofig.subplot( 3 , 2 , i , 'XTick' , C.xtick.( d ) , ...
-        'Units' , 'pixels' , 'XGrid' , 'on' , 'Tag' , tag ) ;
+      ax = ofig.subplot( C.N.modality , C.N.domain , i , ...
+        'XTick' , C.xtick.( d ) , 'Units' , 'pixels' , 'XGrid' , 'on' , ...
+          'Tag' , tag ) ;
       
       % Apply horizontal shift away from channel list box
       ax.Position( 1 ) = ax.Position( 1 ) - dx ;
@@ -182,7 +191,11 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
       end
       
       % Clear x-tick labels on all but bottom plots, which have axis labels
-      if  i < 5 , ax.XTickLabel = [] ; else, xlabel( ax , L.X.( d ) ), end
+      if  i  <  C.N.modality * C.N.domain - 1
+        ax.XTickLabel = [] ;
+      else
+        xlabel( ax , L.X.( d ) )
+      end
       
       % Set y-axis label on bottom plots
       ylabel( ax , [ L.Y.( d ) , m ] )
