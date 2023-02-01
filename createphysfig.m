@@ -33,7 +33,9 @@ function  [ ofig , chlst ] = createphysfig( cfg , evar , tab , buf )
   L.Y.freq = 'dB ' ;
   
   % Pointers to buffer objects
-  C.buf = buf ;
+  C.buf.spk = buf.spk ;
+  C.buf.mua = buf.mua ;
+  C.buf.lfp = buf.lfp ;
   
   % Remove empty fields
   for  M = fieldnames( C.buf )' ; m = M{ 1 } ;
