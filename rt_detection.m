@@ -292,9 +292,9 @@ if  TrialData.currentTrial == 1
         2 * P.extratime ) / 1e3 ;
 
       % For spike buffer, assume no unit will generate above 1000spk/sec.
-      P.buf.spk.setbufsiz( secs , 1000 ) ;
-      P.buf.mua.setbufsiz( secs ) ;
-      if  P.buf.difmualfp , P.buf.lfp.setbufsiz( secs ) ; end
+      if  P.flg.spk , P.buf.spk.setbufsiz( secs , 1000 ) ; end
+      if  P.flg.mua , P.buf.mua.setbufsiz( secs )        ; end
+      if  P.flg.lfp && P.buf.difmualfp , P.buf.lfp.setbufsiz( secs ) ; end
 
       % Response window contains only time of laser onset to last allowable
       % reaction time i.e. saccade onset
@@ -1052,8 +1052,9 @@ if  P.UsingSynapse
   iset( P.syn , 'RecordingNotes' , 'Note' , hdr )
   
   % Resume cyclical buffering of ephys signals
-  P.buf.spk.startbuff( ) ; P.buf.mua.startbuff( ) ;
-  if  P.buf.difmualfp , P.buf.lfp.startbuff( ) ; end
+  if  P.flg.spk , P.buf.spk.startbuff( ) ; end
+  if  P.flg.mua , P.buf.mua.startbuff( ) ; end
+  if  P.flg.lfp && P.buf.difmualfp , P.buf.lfp.startbuff( ) ; end
 
 % No laser
 else
