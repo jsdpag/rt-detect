@@ -907,6 +907,7 @@ end % laser param
 % Special constants for value of max reps
 MAXREP_DEFAULT = 2 ;
 MAXREP_GETFIX  = 100 ;
+MAXREP_NEXT = 'BrokenFix' ;
 
 % Table of states. Each row defines a state. Column order is: state name;
 % timeout duration; next state after timeout or max repetitions; wait event
@@ -1013,8 +1014,13 @@ for  F = fieldnames( ENDACT )' , name = F{ 1 } ;
   
 end % special onExit actions
 
-% Only GetFix has different Max repetitions
-states.GetFix.maxRepetitions = MAXREP_GETFIX ;
+% Only HoldFix abd GetFix have different Max repetitions and ...
+ states.GetFix.maxRepetitions = MAXREP_GETFIX ;
+states.HoldFix.maxRepetitions = MAXREP_GETFIX + 1 ;
+
+% ... next state following max repetisions.
+ states.GetFix.nextStateAfterMaxRepetitions = MAXREP_NEXT ;
+states.HoldFix.nextStateAfterMaxRepetitions = MAXREP_NEXT ;
 
 
 %%% Update script's persistent and user variables %%%
