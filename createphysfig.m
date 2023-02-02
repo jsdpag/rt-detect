@@ -459,8 +459,11 @@ function  dat = fupdate( ~ , dat , ~ , rt )
     % Compute spectral magnitude
     X = 2 * abs( X ) ;
     
+    % All data is finite for these channels
+    i = all( isfinite( X( C.ifreq , : ) ) , 1 ) ;
+    
     % Accumulate spectral magnitude into Welford array
-    dat.( m ).freq = dat.( m ).freq  +  X( C.ifreq , : ) ;
+    dat.( m ).freq( : , i ) = dat.( m ).freq( : , i )  +  X( C.ifreq , i );
     
   end % data modalities
   
