@@ -199,13 +199,16 @@ if  TrialData.currentTrial == 1
   P.ItiStim.previous = [ ] ;
   
   % Make reaction time start and end time variables, and tic time
-  % measurement at end of previous trial for ITI measure
+  % measurement at end of previous trial for ITI measure as well as end of
+  % Wait state to check against window buffer timer duration.
   P.RTstart  = StateRuntimeVariable ;
   P.RTend    = StateRuntimeVariable ;
   P.ITIstart = StateRuntimeVariable ;
+  P.WaitEnd  = StateRuntimeVariable ;
   
     % Initialise P.ITIstart to zero, so that we don't wait on first trial
     P.ITIstart.value = zeros( 1 , 'uint64' ) ;
+     P.WaitEnd.value = zeros( 1 , 'uint64' ) ;
   
   % Create and initialise behaviour plots
   P.bfig = creatbehavfig( cfg , P.err , P.tab , BehaviourXaxis , false ) ;
@@ -304,6 +307,9 @@ if  TrialData.currentTrial == 1
       if  P.flg.spk , P.buf.spk.setrespwin( secs , 1000 ) ; end
       if  P.flg.mua , P.buf.mua.setrespwin( secs )        ; end
       if  P.flg.lfp && P.buf.difmualfp , P.buf.lfp.setrespwin( secs ) ; end
+      
+      % Max buffer Gizmo response window timer duration in seconds
+      P.maxtimerddur = secs ;
       
       % Maximum number of channels to return following each buffer read
       if  P.flg.spk , P.buf.spk.setchsubsel( TdtChannels ) ; end
@@ -443,7 +449,10 @@ else
       % Trial was correct or failed so update ephys plots
       if  ( pre.trialError( end - 1 ) == P.err.Correct || ...
                             pre.trialError( end - 1 ) == P.err.Failed )
-
+        
+        % Guarantee that buffer Gizmo timers run down.
+        sleep( 1e3 * ( P.maxtimerddur - toc( P.WaitEnd.value ) ) )
+        
         % Retrieve buffered data
         if  P.flg.spk , P.buf.spk.getdata( ) ; end
         if  P.flg.mua , P.buf.mua.getdata( ) ; end
@@ -874,7 +883,7 @@ end % laser param
 
 % Special actions executed when state is finished executing. Remember to
 % make this a column vector of cells.
-
+  
   % Pause briefly to allow the first couple of FIXUPDATE events to stream
   % from EyeLink to EyeLinkServer, which then needs time to adjust Win32
   % events pertaining to target windows
@@ -895,8 +904,10 @@ end % laser param
     { @( ) P.ITIstart.set_value( tic ) ;
       @( ) EchoServer.Write( 'End trial %d\n' , TrialData.currentTrial ) };
   
-  % SynapseAPI is live, send run-time note about end of trial
+  % SynapseAPI is live, send run-time note about end of trial, and
+  % guarantee that the windowed buffer Gizmo timers run out before access.
   if  P.UsingSynapse
+    ENDACT.Wait = { @( ) P.WaitEnd.set_value( tic ) } ;
     ENDACT.Correct{ end + 1 } = @( ) iset(  P.syn , 'RecordingNotes' , ...
       'Note' , sprintf( 'RT %dms' , ...
         ceil( P.bhv.reactionTime( P.bhv.currentTrial ) ) )  ) ;
@@ -1092,6 +1103,11 @@ end
 % Report actual ITI in milliseconds
 EchoServer.Write( '%9sITI %dms\n' , '' , ...
   ceil( 1e3 * toc( P.ITIstart.value ) ) )
+
+% Make sure that no trial starts before buffer Gizmo timer runs down
+if  P.UsingSynapse
+  sleep( 1e3 * ( P.maxtimerddur - toc( P.WaitEnd.value ) ) )
+end
 
 % Error log message marking end of task script operations
 logmessage( sprintf( 'Task script rt_detection.m READY trial %d, %s' , ...
