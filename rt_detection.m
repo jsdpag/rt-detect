@@ -451,6 +451,11 @@ else
                             pre.trialError( end - 1 ) == P.err.Failed )
         
         % Guarantee that buffer Gizmo timers run down.
+%%%TESTING%%%
+if  P.maxtimerddur > toc( P.WaitEnd.value )
+  EchoServer.Write( '\nTESTING: Waiting for buffer Gizmo timeout.\n' )
+end
+%%%TESTING%%%
         sleep( 1e3 * ( P.maxtimerddur - toc( P.WaitEnd.value ) ) )
         
         % Retrieve buffered data

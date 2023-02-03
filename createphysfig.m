@@ -446,6 +446,9 @@ function  dat = fupdate( ~ , dat , ~ , rt )
     % Windowed time domain data
     X = X( w , : ) ;
     
+    % Find channels with finite values across all time bins
+    j = all( isfinite( X ) , 1 ) ;
+    
     % Remove DC component
     X = X - mean( X , 1 ) ;
     
@@ -459,11 +462,8 @@ function  dat = fupdate( ~ , dat , ~ , rt )
     % Compute spectral magnitude
     X = 2 * abs( X ) ;
     
-    % All data is finite for these channels
-    i = all( isfinite( X( C.ifreq , : ) ) , 1 ) ;
-    
     % Accumulate spectral magnitude into Welford array
-    dat.( m ).freq( : , i ) = dat.( m ).freq( : , i )  +  X( C.ifreq , i );
+    dat.( m ).freq( : , j ) = dat.( m ).freq( : , j )  +  X( C.ifreq , j );
     
   end % data modalities
   
