@@ -901,7 +901,7 @@ end % laser param
       'Note' , sprintf( 'RT %dms' , ...
         ceil( P.bhv.reactionTime( P.bhv.currentTrial ) ) )  ) ;
     ENDACT.cleanUp{ end + 1 } = @( ) iset( P.syn , 'RecordingNotes' , ...
-      'Note' , sprintf( 'End trial %d\n' , TrialData.currentTrial ) ) ;
+      'Note' , sprintf( 'End trial %d' , TrialData.currentTrial ) ) ;
   end
 
 % Special constants for value of max reps
@@ -1043,7 +1043,7 @@ if  P.UsingSynapse
       c.LaserPhaseDeg , '' , c.LaserEnvelope ) ;
     
   % Start of trial header
-  hdr = { sprintf( 'Start trial %d\nBlock %d' , TrialData.currentTrial ,...
+  hdr = { sprintf( 'Start trial %d;Block %d' , TrialData.currentTrial ,...
     TrialData.currentBlock ) } ;
   
   % Add condition info
@@ -1052,7 +1052,7 @@ if  P.UsingSynapse
       fieldnames( c )' , 'UniformOutput' , false ) ] ;
   
   % Cell of str into classic string
-  hdr = strjoin( hdr , '\n' ) ;
+  hdr = strjoin( hdr , ';' ) ;
 
   % Send header to Synapse server
   iset( P.syn , 'RecordingNotes' , 'Note' , hdr )
