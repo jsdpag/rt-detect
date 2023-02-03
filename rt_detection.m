@@ -451,11 +451,6 @@ else
                             pre.trialError( end - 1 ) == P.err.Failed )
         
         % Guarantee that buffer Gizmo timers run down.
-%%%TESTING%%%
-if  P.maxtimerddur > toc( P.WaitEnd.value )
-  EchoServer.Write( '\nTESTING: Waiting for buffer Gizmo timeout.\n' )
-end
-%%%TESTING%%%
         sleep( 1e3 * ( P.maxtimerddur - toc( P.WaitEnd.value ) ) )
         
         % Retrieve buffered data
@@ -528,16 +523,24 @@ for  F = { 'RfXDeg' , 'RfYDeg' , 'RfRadDeg' , 'FixTolDeg' } ; f = F{ 1 } ;
   
 end % deg2pix
 
-% Sample wait duration
-WaitMs = min( exprnd( WaitAvgMs ) , expinv( WaitMaxProb , WaitAvgMs ) ) ;
+% Sample wait duration if WaitAvgMs is non-zero.
+if  WaitAvgMs > 0
+  WaitMs = min( exprnd( WaitAvgMs ) , expinv( WaitMaxProb , WaitAvgMs ) ) ;
+else
+  WaitMs = 0 ; % Default if WaitAvgMs is zero.
+end
 
   % Make a copy of this trial's waiting time, minus baseline
   v.WaitMs = WaitMs ;
 
-% Compute reward size for correct performance
-rew = rewardsize( P.err.Correct , ...
-  expcdf( WaitMs , WaitAvgMs ) / WaitMaxProb , RewardSlope , ...
-    RewardMinMs , RewardMaxMs );
+% Compute reward size for correct performance if WaitAvgMs non-zero
+if  WaitAvgMs > 0
+  rew = rewardsize( P.err.Correct , ...
+    expcdf( WaitMs , WaitAvgMs ) / WaitMaxProb , RewardSlope , ...
+      RewardMinMs , RewardMaxMs );
+else
+  rew = RewardMaxMs ; % Default if WaitAvgMs is zero.
+end
   
   % And for failed trial [ correct reward , failed reward ]
   rew = [ rew , RewardFailFrac * rew ] ;
@@ -965,6 +968,18 @@ if  TrialData.currentTrial == 1 && ~isequal( P.nam , STATE_TABLE( : , 1 ) )
   error( 'Mismatched event and state names' )
   
 end % state name check
+
+% Special case, the task is in 'fixation mode' because WaitAvgMs is zero
+if  WaitAvgMs == 0
+  
+  % Rewire the state graph. TargetOn times out onto Correct.
+  i = strcmp( 'TargetOn' , STATE_TABLE( : , 1 ) ) ;
+  STATE_TABLE( i , 3 ) = 'Correct' ;
+  
+  % In addition, RespWinWidMs is now the duration of TargetOn.
+  STATE_TABLE( i , 2 ) = RespWinWidMs ;
+  
+end % fixation mode
 
 
 %%% MAKE ARCADE STATES %%%
