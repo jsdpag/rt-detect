@@ -69,7 +69,7 @@ if  TrialData.currentTrial == 1
     
   end % toolboxes
   
-  % Define task script shutdown tasks
+  % Define task script shutdown tasks. ITI stimulus is always at index 1.
   ARCADE_TASK_SCRIPT_SHUTDOWN = cell( 1 , 12 ) ;
   
   % Store local pointer to table defining blocks of trials
@@ -136,8 +136,8 @@ if  TrialData.currentTrial == 1
     P.Flicker.stim.height = P.screensize( 2 ) ;
     
     % Kill objects at session end
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 1 } = @( ) delete( P.Flicker.stim ) ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 2 } = @( ) delete( P.Flicker.anim ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 2 } = @( ) delete( P.Flicker.stim ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 3 } = @( ) delete( P.Flicker.anim ) ;
   
   % Create target stimulus objects, a bit of trickery required to create an
   % empty Stimulus object for 'none'.
@@ -157,17 +157,17 @@ if  TrialData.currentTrial == 1
     P.Target.anim.terminalAction = '00000101' ;
     
     % Kill objects at session end
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 3 } = @( ) delete( P.Target.bar      ) ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 4 } = @( ) delete( P.Target.circle   ) ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 5 } = @( ) delete( P.Target.gaussian ) ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 6 } = @( ) delete( P.Target.anim     ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 4 } = @( ) delete( P.Target.bar      ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 5 } = @( ) delete( P.Target.circle   ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 6 } = @( ) delete( P.Target.gaussian ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 7 } = @( ) delete( P.Target.anim     ) ;
   
   % Create fixation point mask, so that the point is stable during flicker
   P.FixMask = Circle ;
   
     P.FixMask.faceColor( : ) = cfg.BackgroundRGB ;
     P.FixMask.diameter = 0.5 * P.pixperdeg ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 7 } = @( ) delete( P.FixMask ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) delete( P.FixMask ) ;
     
   % Create gaze fixation stimulus
   P.Fix = Rectangle ;
@@ -181,7 +181,7 @@ if  TrialData.currentTrial == 1
     P.Fix.width = sqrt( pi * 0.075 ^ 2 ) * P.pixperdeg ;
     P.Fix.height = P.Fix.width ;
     P.Fix.angle = 45 ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 8 } = @( ) delete( P.Fix ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = @( ) delete( P.Fix ) ;
     
     % Base mask values on fixation point
     P.FixMask.position = P.Fix.position ;
@@ -226,11 +226,11 @@ if  TrialData.currentTrial == 1
     
     % Send end of session message
     footer = [ 'ARCADE end session ' , cfg.sessionName ] ;
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 9 } = ...
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = ...
       @( ) iset( P.syn , 'RecordingNotes' , 'Note' , footer ) ;
     
     % Drop Synapse to Idle mode
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 10 } = @( ) P.syn.setModeStr( 'Idle' ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 11 } = @( ) P.syn.setModeStr( 'Idle' ) ;
     
     % Load up inverse laser transfer functions
     P.invtrans = getlasercoefs( cfg , 'laser_coefs.mat' ) ;
@@ -366,10 +366,14 @@ if  TrialData.currentTrial == 1
   end % synapse api actions
   
   % Try to guarantee that user has time to look at online plots
-  ARCADE_TASK_SCRIPT_SHUTDOWN{ 11 } = @( ) waitfor( msgbox( ...
+  ARCADE_TASK_SCRIPT_SHUTDOWN{ 12 } = @( ) waitfor( msgbox( ...
     [ '\fontsize{14.123}Examine plots.', newline, 'Hit OK when done.' ],...
       'rt_detection.m', 'none', struct( 'WindowStyle', 'non-modal', ...
         'Interpreter' , 'tex' ) ) ) ;
+      
+  % Remove empty elements
+  ARCADE_TASK_SCRIPT_SHUTDOWN( ...
+    cellfun( @isempty , ARCADE_TASK_SCRIPT_SHUTDOWN ) ) = [ ] ;
   
 % All subsequent trials
 else
@@ -405,6 +409,9 @@ else
     %- Psychometric and reaction time curves -%
     for  F = { 'Psychometric' , 'Reaction Time' } , f = F{ 1 } ;
       
+      % There is no RT in fixation mode
+      if  WaitAvgMs == 0 && strcmp( f , 'Reaction Time' ) , continue , end
+      
       % Construct graphics object group identifier
       id = sprintf( '%s Block %d %s %s' , f , ...
         pre.userVariable{ end - 1 }.BlockType , cpre.Target , cpre.Laser );
@@ -425,10 +432,12 @@ else
     % Construct group id
     id = sprintf( 'RT Block %d' , pre.userVariable{ end - 1 }.BlockType ) ;
     
-    % Update histogram
+    % Update histogram, unless we are in fixation mode
     index = pre.reactionTime( end - 1 ) ;
     newdata = pre.trialError( end - 1 ) ;
-    P.bfig.update( id , index , newdata )
+    if  WaitAvgMs > 0
+      P.bfig.update( id , index , newdata )
+    end
     
     % Select groups for new block %
     if  diff( pre.blocks( end - [ 1 , 0 ] ) )
@@ -752,7 +761,7 @@ switch  c.ItiStimulus
   
   % Empty Stimulus object
   case  'none' , P.ItiStim.current = P.Target.none ;
-                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 12 } = @( ) [ ] ;
+                 ARCADE_TASK_SCRIPT_SHUTDOWN{ 1 } = @( ) [ ] ;
     
   % Randomly selected Mondrian mask
   case  'mondrian'
@@ -764,7 +773,7 @@ switch  c.ItiStimulus
     P.ItiStim.current = Picture( fullfile( P.Mondrian.files( i ).folder,...
       P.Mondrian.files( i ).name ) ) ;
     
-    ARCADE_TASK_SCRIPT_SHUTDOWN{ 12 } = @( ) delete( P.ItiStim.current ) ;
+    ARCADE_TASK_SCRIPT_SHUTDOWN{ 1 } = @( ) delete( P.ItiStim.current ) ;
     
   otherwise , error( 'Unrecognised ITI stimulus: %s' , c.ItiStimulus )
 end
@@ -974,10 +983,13 @@ if  WaitAvgMs == 0
   
   % Rewire the state graph. TargetOn times out onto Correct.
   i = strcmp( 'TargetOn' , STATE_TABLE( : , 1 ) ) ;
-  STATE_TABLE( i , 3 ) = 'Correct' ;
+  STATE_TABLE{ i , 3 } = 'Correct' ;
   
   % In addition, RespWinWidMs is now the duration of TargetOn.
-  STATE_TABLE( i , 2 ) = RespWinWidMs ;
+  STATE_TABLE{ i , 2 } = RespWinWidMs ;
+  
+  % And we remove all RT computations
+  ENDACT = rmfield( ENDACT , 'Correct' ) ;
   
 end % fixation mode
 

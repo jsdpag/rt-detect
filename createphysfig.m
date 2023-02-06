@@ -355,7 +355,8 @@ function  dat = fupdate( ~ , dat , ~ , rt )
   C = dat.C ;
   
   % Reaction time is not given.
-  if  isempty( rt )  ||  ~ isscalar( rt )  ||  ~ isnumeric( rt )
+  if  isempty( rt )  ||  ~ isscalar( rt )  ||  ~ isnumeric( rt )  ||  ...
+      ~ isfinite( rt )
     
     % Take data up to the last time bin. No indexing required.
     rt = C.time( end ) ;
